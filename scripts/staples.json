@@ -1,0 +1,13 @@
+{
+  "_comment": "Bar staples the book lacks. Our own suggestions: name -> {partner: strength 1-4}.",
+  "simple syrup": {"limes": 2, "lemons": 2, "mint": 2, "rum": 2, "gin": 1, "bourbon": 1, "whiskey": 1, "vodka": 1,
+                   "tequila": 1, "grapefruit": 1, "strawberries": 1, "basil": 1, "ginger": 1},
+  "bitters": {"bourbon": 2, "whiskey": 2, "rum": 1, "gin": 1, "scotch": 1, "cognac": 1, "vermouth": 2, "sugar": 2,
+              "oranges": 1, "lemons": 1, "champagne": 1, "cherries": 1, "simple syrup": 1},
+  "club soda": {"limes": 2, "lemons": 1, "gin": 1, "vodka": 1, "whiskey": 1, "scotch": 1, "campari": 1, "mint": 1,
+                "rum": 1, "grapefruit": 1, "sugar": 1, "simple syrup": 1},
+  "mezcal": {"limes": 2, "oranges": 1, "grapefruit": 2, "pineapples": 1, "chile peppers": 1, "salt": 1, "honey": 1,
+             "ginger": 1, "cucumbers": 1, "campari": 1, "vermouth": 1, "chocolate / cocoa": 1, "agave nectar": 2},
+  "agave nectar": {"tequila": 2, "limes": 2, "lemons": 1, "grapefruit": 1, "chile peppers": 1, "cucumbers": 1,
+                   "mint": 1, "strawberries": 1, "pineapples": 1}
+}

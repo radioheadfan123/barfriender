@@ -1,0 +1,180 @@
+# Ingredients the Craft builder offers. One name per line, matched by the same key as everything else.
+# Ours, not the book's: edit freely, then `py scripts/load.py && py scripts/push_seed.py`.
+
+# spirits
+applejack
+apple brandy
+apricot brandy
+aquavit
+armagnac
+bourbon
+brandy
+calvados
+cognac
+framboise
+gin
+grappa
+irish whiskey
+kirsch
+pear brandy
+poire william
+rum
+scotch
+southern comfort
+tequila
+vodka
+whiskey
+
+# liqueurs
+amaretto
+anisette
+banana liqueur
+campari
+cassis
+chartreuse
+cointreau
+crème de cassis
+crème de menthe
+curaçao
+grand marnier
+kahlúa
+liqueurs
+maraschino liqueur
+midori liqueur
+orange curaçao
+orange liqueur
+peach liqueur
+pernod
+sambuca
+triple sec
+
+# wine, beer, cider
+beer
+cabernet sauvignon
+champagne
+chardonnay
+cider
+dark ale or beer
+hard cider
+madeira
+marsala wine
+merlot
+pear cider
+pinot noir
+port
+prosecco
+riesling
+sake
+sauternes
+sauvignon blanc
+sherry
+vermouth
+vin santo
+white wine
+wine
+
+# mixers
+apple cider
+chai
+coca-cola
+coconut and coconut milk
+coffee and espresso
+cream
+earl grey tea
+egg whites
+green tea
+lemonade
+milk
+soda
+tea
+tonic
+
+# citrus and fruit
+apples
+apricots
+blackberries
+blueberries
+cherries
+citrus
+cranberries
+cucumbers
+grapefruit
+grapes
+guavas
+kaffir limes and kaffir lime leaf
+kiwi fruit
+kumquats
+lemons
+lemons, meyer
+limes
+lychees
+mangoes
+oranges
+oranges, blood
+oranges, mandarin
+passion fruit
+peaches
+pears
+pineapples
+pomegranates
+pomelos
+raspberries
+rhubarb
+strawberries
+tangerine
+watermelon
+yuzu fruit
+
+# sweeteners and syrups
+caramel
+elderflower syrup
+grenadine
+honey
+maple syrup
+molasses
+orange blossom water
+rose water
+sugar
+sugar, palm
+tamarind syrup
+verjus
+
+# herbs, spice, savory
+allspice
+anise, star
+basil
+basil, thai
+cardamom
+celery salt
+chamomile
+chile peppers
+chile peppers, jalapeño
+chocolate / cocoa
+cilantro
+cinnamon
+cloves
+ginger
+horseradish
+juniper berries
+lavender
+lemon verbena
+lemongrass
+mint
+nutmeg
+olives
+pepper, black
+rosemary
+sage
+salt
+tabasco sauce
+thyme
+tomatoes
+vanilla
+worcestershire sauce
+
+# our staples (scripts/staples.json)
+agave nectar
+bitters
+club soda
+mezcal
+simple syrup

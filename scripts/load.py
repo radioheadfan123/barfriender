@@ -148,7 +148,7 @@ def build(entries):
             if not entry and name.count(",") == 1 and norm(name.split(",")[0].strip()) not in CATEGORIES:
                 head, mod = (s.strip() for s in name.split(","))
                 display = f"{mod} {head}"                             # 'cream, sour' shows as 'sour cream'
-            rows.append({"id": i, "name": display, "key": ks[0], "entry": False})
+            rows.append({"id": i, "name": display, "key": ks[0], "entry": False, "meta": {}})
         for k in ks:
             ids.setdefault(k, i)
         row = rows[i - 1]
@@ -160,24 +160,65 @@ def build(entries):
     # entries first so they own their keys and display names
     for e in entries:
         i = ingredient(e["name"], entry=True)
-        base = re.sub(r"\s*—\s*in general$", "", e["name"])
+        for m, v in e["meta"].items():                                # taste / season / weight / volume
+            rows[i - 1]["meta"].setdefault(m, v)
+        base =re.sub(r"\s*—\s*in general$", "", e["name"])
         # 'melon/ muskmelons', 'chocolate / cocoa', and 'coconut' for 'coconut and coconut milk'
         for a in e["aliases"] + re.split(r"\s*/\s*", base) + base.split(" and "):
             for k in keys(a):
                 ids.setdefault(k, i)                                  # alternate names match, not stored
 
-    pairs = set()
+    pairs = {}                            # (a, b) -> {strength, note}; strength = the stronger direction
     for e in entries:
         a = ids[key(e["name"])]
         for p in e["pairings"]:
             b = ingredient(p["name"])
             if b and a != b:
-                pairs.add((min(a, b), max(a, b)))
-    return rows, pairs
+                cur = pairs.setdefault((min(a, b), max(a, b)), {"strength": 1, "note": None})
+                cur["strength"] = max(cur["strength"], p["strength"])
+                cur["note"] = cur["note"] or p.get("note")
+
+    # classic combos: only names that already match an ingredient, at least 2 of them
+    affs = set()
+    for e in entries:
+        for combo in e.get("affinities", []):
+            got = []
+            for n in combo:
+                r = resolve(n, known)
+                i = r and next((ids[k] for k in keys(r) if k in ids), None)
+                if i and i not in got:
+                    got.append(i)
+            if len(got) >= 2:
+                affs.add(tuple(sorted(got)))
+    return rows, pairs, affs, ids
 
 
 def q(v):
-    return str(v) if isinstance(v, int) else "'" + str(v).replace("'", "''") + "'"
+    if v is None:
+        return "null"
+    if isinstance(v, bool):
+        return str(v).lower()
+    if isinstance(v, int):
+        return str(v)
+    if isinstance(v, list):
+        return "array[" + ", ".join(q(x) for x in v) + "]::text[]"
+    return "'" + str(v).replace("'", "''") + "'"
+
+
+def staples():
+    """Our own bar staples as book-shaped entries, so they load through the same path."""
+    data = json.loads((ROOT / "scripts" / "staples.json").read_text(encoding="utf-8"))
+    return [{"name": n, "aliases": [], "meta": {}, "affinities": [],
+             "pairings": [{"name": p, "strength": s, "note": None} for p, s in partners.items()]}
+            for n, partners in data.items() if not n.startswith("_")]
+
+
+def bar_ids(ids):
+    lines = (ROOT / "scripts" / "bar.txt").read_text(encoding="utf-8").splitlines()
+    names = [l.strip() for l in lines if l.strip() and not l.startswith("#")]
+    missing = [n for n in names if key(n) not in ids]
+    assert not missing, f"bar.txt names with no ingredient: {missing}"
+    return {ids[key(n)] for n in names}
 
 
 def inserts(table, cols, values):
@@ -191,42 +232,56 @@ def inserts(table, cols, values):
 
 # Reload keeps ingredient ids stable (matched by key), so users' saved combos survive a re-import.
 RELOAD = """
-insert into ingredients (name, key) select name, key from new_ing
-  on conflict (key) do update set name = excluded.name;
+insert into ingredients (name, key, taste, season, weight, volume, is_bar)
+  select name, key, taste, season, weight, volume, is_bar from new_ing
+  on conflict (key) do update set name = excluded.name, taste = excluded.taste, season = excluded.season,
+    weight = excluded.weight, volume = excluded.volume, is_bar = excluded.is_bar;
 delete from ingredients i                     -- gone from the book and not in anyone's saved combo
   where not exists (select 1 from new_ing n where n.key = i.key)
     and not exists (select 1 from combo_items c where c.ingredient_id = i.id);
 delete from pairings;                         -- suggestions are all ours: replace them wholesale
-insert into pairings (a_id, b_id)
-  select distinct least(a.id, b.id), greatest(a.id, b.id)
-  from new_pairs p join ingredients a on a.key = p.a_key join ingredients b on b.key = p.b_key;
+insert into pairings (a_id, b_id, strength, note)
+  select distinct on (least(a.id, b.id), greatest(a.id, b.id)) least(a.id, b.id), greatest(a.id, b.id), p.strength, p.note
+  from new_pairs p join ingredients a on a.key = p.a_key join ingredients b on b.key = p.b_key
+  order by least(a.id, b.id), greatest(a.id, b.id), p.strength desc;
+delete from affinities;
+insert into affinities (ingredient_ids)
+  select array(select i.id from unnest(n.keys) k join ingredients i on i.key = k order by i.id) from new_aff n;
 """
 
 
 def main():
-    entries = json.loads((ROOT / "data" / "flavor_bible.json").read_text(encoding="utf-8"))
-    rows, pairs = build(entries)
+    entries = json.loads((ROOT / "data" / "flavor_bible.json").read_text(encoding="utf-8")) + staples()
+    rows, pairs, affs, ids = build(entries)
+    bar = bar_ids(ids)
 
     used = {x for ab in pairs for x in ab}             # entries with no pairings aren't stored
-    ing = [[r["name"], r["key"]] for r in rows if r["id"] in used]
+    m = lambda r, f: r["meta"].get(f)
+    ing = [[r["name"], r["key"], m(r, "taste"), m(r, "season"), m(r, "weight"), m(r, "volume"), r["id"] in bar]
+           for r in rows if r["id"] in used]
     k = {r["id"]: r["key"] for r in rows}
-    pr = [[k[a], k[b]] for a, b in sorted(pairs)]
+    pr = [[k[a], k[b], p["strength"], p["note"]] for (a, b), p in sorted(pairs.items())]
+    af = [[[k[i] for i in a]] for a in sorted(affs) if all(i in used for i in a)]
 
     sql = ["-- generated by scripts/load.py from The Flavor Bible. Do not commit.\nbegin;\n",
-           "create temp table new_ing (name text, key text) on commit drop;\n",
-           "create temp table new_pairs (a_key text, b_key text) on commit drop;\n"]
-    sql += inserts("new_ing", ["name", "key"], ing)
-    sql += inserts("new_pairs", ["a_key", "b_key"], pr)
+           "create temp table new_ing (name text, key text, taste text, season text, weight text, volume text,"
+           " is_bar boolean) on commit drop;\n",
+           "create temp table new_pairs (a_key text, b_key text, strength smallint, note text) on commit drop;\n",
+           "create temp table new_aff (keys text[]) on commit drop;\n"]
+    sql += inserts("new_ing", ["name", "key", "taste", "season", "weight", "volume", "is_bar"], ing)
+    sql += inserts("new_pairs", ["a_key", "b_key", "strength", "note"], pr)
+    sql += inserts("new_aff", ["keys"], af)
     sql.append(RELOAD)
     sql.append("commit;\n")
     out = ROOT / "supabase" / "seed.sql"
     out.write_text("".join(sql), encoding="utf-8")
-    print(f"{len(ing)} ingredients, {len(pr)} pairings -> {out} ({out.stat().st_size // 1024} KB)")
-    return rows, pairs
+    print(f"{len(ing)} ingredients ({sum(r[-1] for r in ing)} bar), {len(pr)} pairings, {len(af)} combos"
+          f" -> {out} ({out.stat().st_size // 1024} KB)")
+    return rows, pairs, af, ing
 
 
 if __name__ == "__main__":
-    rows, pairs = main()
+    rows, pairs, af, ing = main()
     # self-check: plural/singular and 'in general' entries link up with their partners
     assert key("limes") == key("lime") and key("MINT — IN GENERAL".lower()) == key("mint")
     assert key("cherries") == key("cherry") and key("tomatoes") == key("tomato")
@@ -234,5 +289,11 @@ if __name__ == "__main__":
     by_name = {r["key"]: r["id"] for r in rows}
     assert all(a < b for a, b in pairs)
     lime, mint = by_name[key("lime")], by_name[key("mint")]
-    assert (min(lime, mint), max(lime, mint)) in pairs, "lime + mint should pair"
+    assert pairs[(min(lime, mint), max(lime, mint))]["strength"] >= 2, "lime + mint should pair strongly"
+    assert sum(r[-1] for r in ing) > 50 and len(af) >= 100
+    for s in staples():
+        sid = by_name[key(s["name"])]
+        for p in s["pairings"]:
+            pid = by_name[key(p["name"])]
+            assert (min(sid, pid), max(sid, pid)) in pairs, f"staple pair missing: {s['name']} + {p['name']}"
     print("checks ok; most-linked:", Counter(x for ab in pairs for x in ab).most_common(3))
