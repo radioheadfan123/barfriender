@@ -41,6 +41,7 @@ const KEY = "sb_publishable_s9VaMlYhtn9n6O1XfC6w0Q_iUfMGFZa";
 const headers = { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" };
 
 const byName = new Map();           // name -> id
+const byKey = new Map();            // normalized key -> name, so 'lime' finds 'limes'
 let picked = [];                    // [{id, name}]
 const $ = (id) => document.getElementById(id);
 
@@ -70,9 +71,21 @@ async function refresh() {
   $("results").replaceChildren(...rows.map((r) => chip(r, "", () => add(r.name))));
 }
 
-function add(name) {
+// Mirrors singular()/norm() in scripts/load.py, enough for what people type.
+function singular(w) {
+  if (w === "leaves") return "leaf";
+  if (w.length > 3 && w.endsWith("ies")) return w.slice(0, -3) + "y";
+  if (w.length > 3 && /(oes|ches|shes|xes)$/.test(w)) return w.slice(0, -2);
+  if (w.length > 3 && w.endsWith("s") && !/(ss|us|is)$/.test(w)) return w.slice(0, -1);
+  return w;
+}
+const norm = (n) => (n.toLowerCase().replace(/’/g, "'").match(/[\w'&-]+/g) || []).map(singular).join(" ");
+
+function add(typed) {
+  const name = byName.has(typed) ? typed : byKey.get(typed.toLowerCase()) || byKey.get(norm(typed));
   const id = byName.get(name);
-  if (id && !picked.some((p) => p.id === id)) { picked.push({ id, name }); refresh(); }
+  if (!id) { if (typed) $("status").textContent = `No ingredient called "${typed}". Try the dropdown.`; return; }
+  if (!picked.some((p) => p.id === id)) { picked.push({ id, name }); refresh(); }
   $("search").value = "";
 }
 
@@ -81,10 +94,10 @@ $("search").addEventListener("change", (e) => add(e.target.value.trim()));
 (async () => {
   // PostgREST caps a response at 1000 rows, so page through all ingredients.
   for (let from = 0; ; from += 1000) {
-    const res = await fetch(`${API}/ingredients?select=id,name&order=name`,
+    const res = await fetch(`${API}/ingredients?select=id,name,key&order=name`,
       { headers: { ...headers, Range: `${from}-${from + 999}` } });
     const rows = await res.json();
-    rows.forEach((r) => byName.set(r.name, r.id));
+    rows.forEach((r) => { byName.set(r.name, r.id); byKey.set(r.key, r.name); byKey.set(r.name.toLowerCase(), r.name); });
     if (rows.length < 1000) break;
   }
   $("names").replaceChildren(...[...byName.keys()].map((n) => Object.assign(document.createElement("option"), { value: n })));
