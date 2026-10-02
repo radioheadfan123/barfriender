@@ -114,7 +114,10 @@ async function suggest() {
   $("results").replaceChildren(...sections);
 }
 
-function update() { renderGlass(); suggest(); }
+const save = () => keep.set("glass", { glass, drink, notes: $("notes").value });
+function update() { save(); renderGlass(); suggest(); }
+$("notes").addEventListener("input", save);
+$("glass").addEventListener("input", save);   // amounts
 
 function add(typed) {
   const name = find(typed), id = byName.get(name);
@@ -153,6 +156,13 @@ async function fromHash() {
         .map((i) => ({ id: i.ingredient_id, name: byId.get(i.ingredient_id).name, amount: i.amount || "" }));
     }
     history.replaceState(null, "", "/craft.html");
+  } else {
+    const k = keep.get("glass");
+    if (k) {
+      glass = (k.glass || []).filter((g) => byId.has(g.id));
+      drink = k.drink || null;
+      $("notes").value = k.notes || "";
+    }
   }
   update();
 }

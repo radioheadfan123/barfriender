@@ -6,6 +6,13 @@ const KEY = "sb_publishable_s9VaMlYhtn9n6O1XfC6w0Q_iUfMGFZa";
 const sb = supabase.createClient(SUPABASE, KEY);
 
 const $ = (id) => document.getElementById(id);
+
+// Per-page work in progress (picks, explored ingredient, the glass), so switching tabs doesn't lose it.
+// Browser storage can be blocked (private mode); then pages just start fresh.
+const keep = {
+  get(k) { try { return JSON.parse(localStorage.getItem("pourpair:" + k)); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem("pourpair:" + k, JSON.stringify(v)); } catch {} },
+};
 const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 
 // Book strength from typography: plain 1, bold 2, BOLD CAPS 3, *BOLD CAPS 4.

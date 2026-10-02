@@ -36,7 +36,9 @@ function go(typed) {
 $("search").addEventListener("change", (e) => e.target.value.trim() && go(e.target.value.trim()));
 
 async function show() {
+  if (!location.hash && keep.get("explore")) history.replaceState(null, "", "#" + encodeURIComponent(keep.get("explore")));
   const name = decodeURIComponent(location.hash.slice(1));
+  if (byName.has(name)) keep.set("explore", name);
   const id = byName.get(name);
   $("view").hidden = !id;
   if (!id) { $("status").textContent = "Pick an ingredient to start."; return; }

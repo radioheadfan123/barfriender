@@ -32,6 +32,7 @@ async function refresh() {
   })));
   $("results").replaceChildren();
   $("legend").hidden = true;
+  keep.set("picked", picked.map((p) => p.id));
   showSaveBar();
   if (!picked.length) { $("status").textContent = "Add an ingredient to start."; return; }
   $("status").textContent = "Looking…";
@@ -57,9 +58,9 @@ $("search").addEventListener("change", (e) => add(e.target.value.trim()));
 // '#ids=1,2,3' comes from Explore's classic combos and from a saved combo's "See pairings".
 function fromHash() {
   const m = location.hash.match(/^#ids=([\d,]+)$/);
-  if (!m) return refresh();
-  picked = m[1].split(",").map(Number).filter((id) => byId.has(id)).map((id) => ({ id, name: byId.get(id).name }));
-  history.replaceState(null, "", "/");
+  const ids = m ? m[1].split(",").map(Number) : keep.get("picked") || [];
+  picked = ids.filter((id) => byId.has(id)).map((id) => ({ id, name: byId.get(id).name }));
+  if (m) history.replaceState(null, "", "/");
   refresh();
 }
 window.addEventListener("hashchange", fromHash);
