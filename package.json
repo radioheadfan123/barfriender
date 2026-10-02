@@ -1,0 +1,6 @@
+{
+  "name": "pourpair",
+  "private": true,
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=20" }
+}

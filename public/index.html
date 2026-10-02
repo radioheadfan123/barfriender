@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pourpair</title>
+<style>
+  :root { --bg: #fbfaf7; --fg: #1d1b18; --muted: #6b665e; --line: #e4e0d8; --chip: #efe9dd; --accent: #7a4b1f; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161513; --fg: #ece8e1; --muted: #a39d93; --line: #2f2c28; --chip: #2a2622; --accent: #e0a868; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 32px 16px; }
+  h1 { margin: 0 0 4px; font-size: 28px; }
+  p.sub { margin: 0 0 24px; color: var(--muted); }
+  input { width: 100%; padding: 12px 14px; font: inherit; color: inherit; background: transparent;
+          border: 1px solid var(--line); border-radius: 10px; }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 24px; min-height: 8px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--chip);
+          border: 0; border-radius: 999px; font: inherit; color: inherit; cursor: pointer; }
+  .chip.picked { background: var(--accent); color: var(--bg); }
+  .status { color: var(--muted); margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>pourpair</h1>
+  <p class="sub">Pick ingredients. See what pairs well with all of them.</p>
+  <input id="search" list="names" placeholder="Add an ingredient, e.g. lime" autocomplete="off" aria-label="Add an ingredient">
+  <datalist id="names"></datalist>
+  <div class="chips" id="picked" aria-label="Selected ingredients"></div>
+  <div class="status" id="status" aria-live="polite">Loading ingredients…</div>
+  <div class="chips" id="results"></div>
+</main>
+<script>
+// Supabase publishable key: safe in the browser, row level security limits it to reading suggestions.
+const API = "https://qadsopswciuagvepcuyh.supabase.co/rest/v1";
+const KEY = "sb_publishable_s9VaMlYhtn9n6O1XfC6w0Q_iUfMGFZa";
+const headers = { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" };
+
+const byName = new Map();           // name -> id
+let picked = [];                    // [{id, name}]
+const $ = (id) => document.getElementById(id);
+
+function chip(item, cls, onClick) {
+  const b = document.createElement("button");
+  b.className = "chip " + cls;
+  b.textContent = cls === "picked" ? item.name + " ×" : item.name;
+  b.onclick = onClick;
+  return b;
+}
+
+async function refresh() {
+  $("picked").replaceChildren(...picked.map((p) => chip(p, "picked", () => {
+    picked = picked.filter((x) => x.id !== p.id); refresh();
+  })));
+  $("results").replaceChildren();
+  if (!picked.length) { $("status").textContent = "Add an ingredient to start."; return; }
+  $("status").textContent = "Looking…";
+  const res = await fetch(`${API}/rpc/mutual_pairings`, {
+    method: "POST", headers, body: JSON.stringify({ ids: picked.map((p) => p.id) }),
+  });
+  const rows = res.ok ? await res.json() : [];
+  const label = picked.map((p) => p.name).join(" + ");
+  $("status").textContent = rows.length
+    ? `${rows.length} pair well with ${label}. Tap one to add it.`
+    : `Nothing pairs with all of ${label}. Remove one to widen it.`;
+  $("results").replaceChildren(...rows.map((r) => chip(r, "", () => add(r.name))));
+}
+
+function add(name) {
+  const id = byName.get(name);
+  if (id && !picked.some((p) => p.id === id)) { picked.push({ id, name }); refresh(); }
+  $("search").value = "";
+}
+
+$("search").addEventListener("change", (e) => add(e.target.value.trim()));
+
+(async () => {
+  // PostgREST caps a response at 1000 rows, so page through all ingredients.
+  for (let from = 0; ; from += 1000) {
+    const res = await fetch(`${API}/ingredients?select=id,name&order=name`,
+      { headers: { ...headers, Range: `${from}-${from + 999}` } });
+    const rows = await res.json();
+    rows.forEach((r) => byName.set(r.name, r.id));
+    if (rows.length < 1000) break;
+  }
+  $("names").replaceChildren(...[...byName.keys()].map((n) => Object.assign(document.createElement("option"), { value: n })));
+  refresh();
+})();
+</script>
+</body>
+</html>
