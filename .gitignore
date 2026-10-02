@@ -1,0 +1,5 @@
+data/
+supabase/seed.sql
+.env
+__pycache__/
+supabase/.temp/
