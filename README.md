@@ -8,12 +8,14 @@ Stack: Supabase (Postgres, auth, RLS) + Railway (API, later).
 ## Data
 
 Seed pairings come from *The Flavor Bible* (Page and Dornenburg). Only "X pairs well with Y"
-is stored: ingredient names and pairs. The book's text is not stored, and the
+is stored: ingredient names and pairs. The loader merges variants (lime juice -> lime,
+shellfish, clams -> clams) and drops non-ingredients (cuisines, techniques, tasting terms, quote scraps). The book's text is not stored, and the
 extracted data and generated seed are gitignored.
 
 ```
 py scripts/extract.py <path-to-The-Flavor-Bible.pdf>   # -> data/flavor_bible.json
 py scripts/load.py                                      # -> supabase/seed.sql (+ self-checks)
+py scripts/push_seed.py                                 # reload book rows into the DB in .env
 ```
 
 ## Schema
