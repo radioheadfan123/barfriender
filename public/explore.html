@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Explore · pourpair</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+  <header><h1><a href="/">pourpair</a></h1><div id="account"></div></header>
+  <p class="sub">Look up one ingredient. See everything it goes with, strongest first.</p>
+  <input id="search" list="names" placeholder="Explore an ingredient, e.g. bourbon" autocomplete="off" aria-label="Explore an ingredient">
+  <div class="status" id="status" aria-live="polite">Loading ingredients…</div>
+  <article id="view" hidden>
+    <h2 id="name"></h2>
+    <p class="profile" id="profile"></p>
+    <p><a id="pairLink" href="/">Pair with other ingredients →</a></p>
+    <section id="combosBox" hidden>
+      <h3>Classic combos</h3>
+      <div class="chips" id="combos"></div>
+    </section>
+    <div id="groups"></div>
+  </article>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/common.js"></script>
+<script>
+// The URL hash is the ingredient name, so every view is linkable and Back works.
+function go(typed) {
+  const name = find(typed);
+  if (!name) { $("status").textContent = `No ingredient called "${typed}". Try the dropdown.`; return; }
+  $("search").value = "";
+  location.hash = encodeURIComponent(name);
+}
+$("search").addEventListener("change", (e) => e.target.value.trim() && go(e.target.value.trim()));
+
+async function show() {
+  const name = decodeURIComponent(location.hash.slice(1));
+  const id = byName.get(name);
+  $("view").hidden = !id;
+  if (!id) { $("status").textContent = "Pick an ingredient to start."; return; }
+  const ing = byId.get(id);
+  $("status").textContent = "";
+  $("name").textContent = name;
+  $("profile").textContent = [ing.taste, ing.weight, ing.volume && ing.volume + " flavor", ing.season]
+    .filter(Boolean).join(" · ");
+  $("pairLink").href = "/#ids=" + id;
+
+  const [pairs, combos] = await Promise.all([
+    sb.rpc("ingredient_pairings", { ing: id }),
+    sb.from("affinities").select("ingredient_ids").contains("ingredient_ids", [id]),
+  ]);
+  if (decodeURIComponent(location.hash.slice(1)) !== name) return;   // user moved on while loading
+
+  const cs = (combos.data || []).map((c) => c.ingredient_ids.filter((i) => byId.has(i)));
+  $("combosBox").hidden = !cs.length;
+  $("combos").replaceChildren(...cs.map((ids) => chip({ name: ids.map((i) => byId.get(i).name).join(" + ") }, "",
+    () => { location.href = "/#ids=" + ids.join(","); })));
+
+  const rows = pairs.data || [];
+  $("groups").replaceChildren(...[4, 3, 2, 1].map((s) => {
+    const list = rows.filter((r) => r.strength === s);
+    if (!list.length) return "";
+    return el("section", {}, el("h3", { textContent: `${STRENGTH[s]} (${list.length})` }),
+      el("div", { className: "chips" }, ...list.map((r) => chip(r, "", () => go(r.name)))));
+  }));
+}
+window.addEventListener("hashchange", show);
+ready.then(show);
+</script>
+</body>
+</html>

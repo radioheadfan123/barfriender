@@ -4,157 +4,46 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>pourpair</title>
-<style>
-  :root { --bg: #fbfaf7; --fg: #1d1b18; --muted: #6b665e; --line: #e4e0d8; --chip: #efe9dd; --accent: #7a4b1f; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #161513; --fg: #ece8e1; --muted: #a39d93; --line: #2f2c28; --chip: #2a2622; --accent: #e0a868; }
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
-  main { max-width: 720px; margin: 0 auto; padding: 32px 16px; }
-  h1 { margin: 0 0 4px; font-size: 28px; }
-  p.sub { margin: 0 0 24px; color: var(--muted); }
-  input { width: 100%; padding: 12px 14px; font: inherit; color: inherit; background: transparent;
-          border: 1px solid var(--line); border-radius: 10px; }
-  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 24px; min-height: 8px; }
-  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--chip);
-          border: 0; border-radius: 999px; font: inherit; color: inherit; cursor: pointer; }
-  .chip.picked { background: var(--accent); color: var(--bg); }
-  .status { color: var(--muted); margin-bottom: 12px; }
-  header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-  #account { color: var(--muted); font-size: 14px; text-align: right; }
-  h2 { font-size: 18px; margin: 32px 0 12px; }
-  textarea { width: 100%; padding: 12px 14px; font: inherit; color: inherit; background: transparent;
-             border: 1px solid var(--line); border-radius: 10px; resize: vertical; }
-  .link { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); cursor: pointer; }
-  .primary { padding: 8px 16px; border: 0; border-radius: 10px; background: var(--accent); color: var(--bg);
-             font: inherit; cursor: pointer; }
-  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-  .stack > * { margin: 0 0 12px; }
-  .err { color: #c0392b; min-height: 1em; }
-  dialog { width: min(440px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 14px;
-           background: var(--bg); color: var(--fg); padding: 20px; }
-  dialog::backdrop { background: rgb(0 0 0 / .45); }
-  dialog h2 { margin-top: 0; }
-  .combo { display: block; width: 100%; text-align: left; margin-bottom: 8px; padding: 12px 14px; font: inherit;
-           color: inherit; background: transparent; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
-  .combo small { display: block; color: var(--muted); }
-  .item { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-  .item span { flex: 1; }
-  .item input { width: 120px; padding: 6px 10px; }
-</style>
+<link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <main>
-  <header><h1>pourpair</h1><div id="account"></div></header>
+  <header><h1><a href="/">pourpair</a></h1><div id="account"></div></header>
   <p class="sub">Pick ingredients. See what pairs well with all of them.</p>
   <input id="search" list="names" placeholder="Add an ingredient, e.g. lime" autocomplete="off" aria-label="Add an ingredient">
-  <datalist id="names"></datalist>
   <div class="chips" id="picked" aria-label="Selected ingredients"></div>
   <div class="status" id="status" aria-live="polite">Loading ingredients…</div>
   <div class="chips" id="results"></div>
+  <p class="legend" id="legend" hidden><b>BOLD CAPS</b> = classic match, <b>bold</b> = highly recommended.</p>
   <p id="saveBar" hidden><button class="primary" id="saveBtn">Save this combo</button></p>
   <section id="mine" hidden>
     <h2>My combos</h2>
     <div id="comboList"></div>
   </section>
 </main>
-
-<dialog id="authDlg">
-  <form id="authForm" class="stack">
-    <h2>Sign in</h2>
-    <input id="email" type="email" placeholder="Email" autocomplete="email" required aria-label="Email">
-    <input id="password" type="password" placeholder="Password (8+ characters)" minlength="8" required
-           autocomplete="current-password" aria-label="Password">
-    <div class="err" id="authErr" aria-live="polite"></div>
-    <div class="row">
-      <button class="primary" value="signin">Sign in</button>
-      <button class="link" value="signup">Create account</button>
-      <button class="link" value="forgot" formnovalidate>Forgot password?</button>
-      <button class="link" value="close" formnovalidate>Cancel</button>
-    </div>
-  </form>
-</dialog>
-
-<dialog id="pwDlg">
-  <form id="pwForm" class="stack">
-    <h2>Set a new password</h2>
-    <input id="newPw" type="password" placeholder="New password (8+ characters)" minlength="8" required
-           autocomplete="new-password" aria-label="New password">
-    <div class="err" id="pwErr" aria-live="polite"></div>
-    <button class="primary">Save password</button>
-  </form>
-</dialog>
-
-<dialog id="comboDlg">
-  <form id="comboForm" class="stack">
-    <input id="cName" placeholder="Combo name" maxlength="80" required aria-label="Combo name">
-    <div id="cItems"></div>
-    <input id="cAdd" list="names" placeholder="Add an ingredient" autocomplete="off" aria-label="Add an ingredient to this combo">
-    <textarea id="cNotes" rows="4" placeholder="Notes: method, glass, garnish, ideas" aria-label="Notes"></textarea>
-    <div class="err" id="comboErr" aria-live="polite"></div>
-    <div class="row">
-      <button class="primary" value="save">Save</button>
-      <button class="link" value="show" formnovalidate>See pairings</button>
-      <button class="link" value="delete" formnovalidate id="cDelete">Delete</button>
-      <button class="link" value="close" formnovalidate>Close</button>
-    </div>
-  </form>
-</dialog>
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/common.js"></script>
 <script>
-// Supabase publishable key: safe in the browser, row level security limits it to reading suggestions
-// and to each signed-in user's own combos.
-const SUPABASE = "https://qadsopswciuagvepcuyh.supabase.co";
-const API = SUPABASE + "/rest/v1";
-const KEY = "sb_publishable_s9VaMlYhtn9n6O1XfC6w0Q_iUfMGFZa";
-const headers = { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" };
-
-const byName = new Map();           // name -> id
-const byKey = new Map();            // normalized key -> name, so 'lime' finds 'limes'
 let picked = [];                    // [{id, name}]
-const $ = (id) => document.getElementById(id);
-
-function chip(item, cls, onClick) {
-  const b = document.createElement("button");
-  b.className = "chip " + cls;
-  b.textContent = cls === "picked" ? item.name + " ×" : item.name;
-  b.onclick = onClick;
-  return b;
-}
 
 async function refresh() {
   $("picked").replaceChildren(...picked.map((p) => chip(p, "picked", () => {
     picked = picked.filter((x) => x.id !== p.id); refresh();
   })));
   $("results").replaceChildren();
+  $("legend").hidden = true;
   showSaveBar();
   if (!picked.length) { $("status").textContent = "Add an ingredient to start."; return; }
   $("status").textContent = "Looking…";
-  const res = await fetch(`${API}/rpc/mutual_pairings`, {
-    method: "POST", headers, body: JSON.stringify({ ids: picked.map((p) => p.id) }),
-  });
-  const rows = res.ok ? await res.json() : [];
+  const { data } = await sb.rpc("mutual_pairings", { ids: picked.map((p) => p.id) });
+  const rows = data || [];
   const label = picked.map((p) => p.name).join(" + ");
   $("status").textContent = rows.length
-    ? `${rows.length} pair well with ${label}. Tap one to add it.`
+    ? `${rows.length} pair well with ${label}. Strongest first. Tap one to add it.`
     : `Nothing pairs with all of ${label}. Remove one to widen it.`;
+  $("legend").hidden = !rows.some((r) => r.strength >= 3);
   $("results").replaceChildren(...rows.map((r) => chip(r, "", () => add(r.name))));
 }
-
-// Mirrors singular()/norm() in scripts/load.py, enough for what people type.
-function singular(w) {
-  if (w === "leaves") return "leaf";
-  if (w.length > 3 && w.endsWith("ies")) return w.slice(0, -3) + "y";
-  if (w.length > 3 && /(oes|ches|shes|xes)$/.test(w)) return w.slice(0, -2);
-  if (w.length > 3 && w.endsWith("s") && !/(ss|us|is)$/.test(w)) return w.slice(0, -1);
-  return w;
-}
-const norm = (n) => (n.toLowerCase().replace(/’/g, "'").match(/[\w'&-]+/g) || []).map(singular).join(" ");
-
-const find = (typed) => byName.has(typed) ? typed : byKey.get(typed.toLowerCase()) || byKey.get(norm(typed));
 
 function add(typed) {
   const name = find(typed);
@@ -163,175 +52,23 @@ function add(typed) {
   if (!picked.some((p) => p.id === id)) { picked.push({ id, name }); refresh(); }
   $("search").value = "";
 }
-
 $("search").addEventListener("change", (e) => add(e.target.value.trim()));
 
-// --- accounts ---------------------------------------------------------------------------
-const sb = supabase.createClient(SUPABASE, KEY);
-let user = null;
-
-sb.auth.onAuthStateChange((event, session) => {
-  user = session?.user || null;
-  if (event === "PASSWORD_RECOVERY") $("pwDlg").showModal();
-  setTimeout(() => { renderAccount(); showSaveBar(); loadCombos(); });   // never await sb calls inside this callback
-});
-
-function renderAccount() {
-  const a = $("account");
-  if (!user) {
-    a.replaceChildren(Object.assign(document.createElement("button"),
-      { className: "link", textContent: "Sign in", onclick: () => $("authDlg").showModal() }));
-    return;
-  }
-  a.replaceChildren(user.email + " · ", Object.assign(document.createElement("button"),
-    { className: "link", textContent: "Sign out", onclick: () => sb.auth.signOut() }));
+// '#ids=1,2,3' comes from Explore's classic combos and from a saved combo's "See pairings".
+function fromHash() {
+  const m = location.hash.match(/^#ids=([\d,]+)$/);
+  if (!m) return refresh();
+  picked = m[1].split(",").map(Number).filter((id) => byId.has(id)).map((id) => ({ id, name: byId.get(id).name }));
+  history.replaceState(null, "", "/");
+  refresh();
 }
-
-$("authForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const action = e.submitter?.value || "signin";
-  const email = $("email").value.trim(), password = $("password").value;
-  $("authErr").textContent = "";
-  if (action === "close") return $("authDlg").close();
-  if (action === "forgot") {
-    if (!email) { $("authErr").textContent = "Type your email first."; return; }
-    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin });
-    $("authErr").textContent = error ? error.message : "Check your email for a reset link.";
-    return;
-  }
-  const { error } = action === "signup"
-    ? await sb.auth.signUp({ email, password })
-    : await sb.auth.signInWithPassword({ email, password });
-  if (error) { $("authErr").textContent = error.message; return; }
-  $("password").value = "";
-  $("authDlg").close();
-});
-
-$("pwForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const { error } = await sb.auth.updateUser({ password: $("newPw").value });
-  if (error) { $("pwErr").textContent = error.message; return; }
-  $("newPw").value = "";
-  $("pwDlg").close();
-});
-
-// --- saved combos -----------------------------------------------------------------------
-// A combo is a name, ingredients with optional amounts ('2 oz', 'dash'), and notes.
-let editing = null;   // { id: number|null, items: [{ id, name, amount }] }
+window.addEventListener("hashchange", fromHash);
 
 function showSaveBar() { $("saveBar").hidden = !(user && picked.length); }
-
+window.onUser = showSaveBar;
 $("saveBtn").onclick = () => openCombo({ id: null, name: "", notes: "", items: picked.map((p) => ({ ...p, amount: "" })) });
 
-async function loadCombos() {
-  $("mine").hidden = !user;
-  if (!user) return;
-  const { data, error } = await sb.from("combos")
-    .select("id, name, notes, combo_items(ingredient_id, amount, position, ingredients(name))")
-    .eq("user_id", user.id).order("created_at", { ascending: false });
-  if (error) { $("comboList").textContent = "Couldn't load your combos: " + error.message; return; }
-  if (!data.length) { $("comboList").textContent = "No saved combos yet. Pick ingredients, then Save this combo."; return; }
-  $("comboList").replaceChildren(...data.map((c) => {
-    const items = c.combo_items.sort((a, b) => a.position - b.position)
-      .map((i) => ({ id: i.ingredient_id, name: i.ingredients.name, amount: i.amount || "" }));
-    const b = document.createElement("button");
-    b.className = "combo";
-    b.append(c.name, Object.assign(document.createElement("small"),
-      { textContent: items.map((i) => (i.amount ? i.amount + " " : "") + i.name).join(", ") }));
-    b.onclick = () => openCombo({ id: c.id, name: c.name, notes: c.notes || "", items });
-    return b;
-  }));
-}
-
-function openCombo(c) {
-  editing = { id: c.id, items: c.items };
-  $("cName").value = c.name;
-  $("cNotes").value = c.notes;
-  $("cDelete").hidden = c.id === null;
-  $("comboErr").textContent = "";
-  renderItems();
-  $("comboDlg").showModal();
-}
-
-function renderItems() {
-  $("cItems").replaceChildren(...editing.items.map((it) => {
-    const row = document.createElement("div");
-    row.className = "item";
-    const amt = Object.assign(document.createElement("input"),
-      { value: it.amount, placeholder: "amount", maxLength: 40, oninput: (e) => { it.amount = e.target.value; } });
-    amt.setAttribute("aria-label", "Amount of " + it.name);
-    const rm = Object.assign(document.createElement("button"), { type: "button", className: "link", textContent: "×",
-      onclick: () => { editing.items = editing.items.filter((x) => x !== it); renderItems(); } });
-    rm.setAttribute("aria-label", "Remove " + it.name);
-    row.append(Object.assign(document.createElement("span"), { textContent: it.name }), amt, rm);
-    return row;
-  }));
-}
-
-function addToCombo() {
-  const typed = $("cAdd").value.trim(), name = find(typed), id = byName.get(name);
-  if (!typed) return;
-  if (!id) { $("comboErr").textContent = `No ingredient called "${typed}".`; return; }
-  if (!editing.items.some((i) => i.id === id)) editing.items.push({ id, name, amount: "" });
-  $("cAdd").value = "";
-  $("comboErr").textContent = "";
-  renderItems();
-}
-$("cAdd").addEventListener("change", addToCombo);
-$("cAdd").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addToCombo(); } });   // Enter adds, not saves
-
-$("comboForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const action = e.submitter?.value || "save";
-  const err = (m) => { $("comboErr").textContent = m; };
-  if (action === "close") return $("comboDlg").close();
-  if (action === "show") {
-    picked = editing.items.map(({ id, name }) => ({ id, name }));
-    $("comboDlg").close();
-    return refresh();
-  }
-  if (action === "delete") {
-    if (!confirm("Delete this combo?")) return;
-    const { error } = await sb.from("combos").delete().eq("id", editing.id);
-    if (error) return err(error.message);
-    $("comboDlg").close();
-    return loadCombos();
-  }
-  if (!editing.items.length) return err("Add at least one ingredient.");
-  const fields = { name: $("cName").value.trim(), notes: $("cNotes").value.trim() || null };
-  let id = editing.id;
-  if (id === null) {
-    const { data, error } = await sb.from("combos").insert({ ...fields, user_id: user.id }).select("id").single();
-    if (error) return err(error.message);
-    id = editing.id = data.id;
-  } else {
-    const { error } = await sb.from("combos").update(fields).eq("id", id);
-    if (error) return err(error.message);
-  }
-  // Upsert first, then drop removed rows, so a failed save never loses what was there.
-  const rows = editing.items.map((it, position) =>
-    ({ combo_id: id, ingredient_id: it.id, amount: it.amount.trim() || null, position }));
-  const up = await sb.from("combo_items").upsert(rows, { onConflict: "combo_id,ingredient_id" });
-  if (up.error) return err(up.error.message);
-  const del = await sb.from("combo_items").delete().eq("combo_id", id)
-    .not("ingredient_id", "in", `(${rows.map((r) => r.ingredient_id).join(",")})`);
-  if (del.error) return err(del.error.message);
-  $("comboDlg").close();
-  loadCombos();
-});
-
-(async () => {
-  // PostgREST caps a response at 1000 rows, so page through all ingredients.
-  for (let from = 0; ; from += 1000) {
-    const res = await fetch(`${API}/ingredients?select=id,name,key&order=name`,
-      { headers: { ...headers, Range: `${from}-${from + 999}` } });
-    const rows = await res.json();
-    rows.forEach((r) => { byName.set(r.name, r.id); byKey.set(r.key, r.name); byKey.set(r.name.toLowerCase(), r.name); });
-    if (rows.length < 1000) break;
-  }
-  $("names").replaceChildren(...[...byName.keys()].map((n) => Object.assign(document.createElement("option"), { value: n })));
-  refresh();
-})();
+ready.then(fromHash);
 </script>
 </body>
 </html>
