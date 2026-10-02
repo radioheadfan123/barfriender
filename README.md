@@ -21,7 +21,7 @@ py scripts/push_seed.py                                 # reload book rows into 
 ## Schema
 
 `supabase/migrations/` holds the schema: `ingredients`, undirected `pairings` (a_id < b_id),
-`combos` + `combo_items` (user-saved combos and recipes, empty until users add them). `created_by` / `user_id`
-null means book data. RLS: public read of book rows and public combos, users write their own.
+`combos` + `combo_items` (user-saved combos and recipes). Suggestions (ingredients + pairings) are ours only; `push_seed.py` reloads them by key so ids and saved combos survive. `created_by` / `user_id`
+null means book data. RLS: everyone reads ingredients, pairings and public combos; only we write suggestions; users write only their own combos.
 
 `select * from mutual_pairings(array[<id>, <id>])` returns what pairs with all of them.
