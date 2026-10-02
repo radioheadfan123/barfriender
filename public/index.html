@@ -22,21 +22,93 @@
           border: 0; border-radius: 999px; font: inherit; color: inherit; cursor: pointer; }
   .chip.picked { background: var(--accent); color: var(--bg); }
   .status { color: var(--muted); margin-bottom: 12px; }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  #account { color: var(--muted); font-size: 14px; text-align: right; }
+  h2 { font-size: 18px; margin: 32px 0 12px; }
+  textarea { width: 100%; padding: 12px 14px; font: inherit; color: inherit; background: transparent;
+             border: 1px solid var(--line); border-radius: 10px; resize: vertical; }
+  .link { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); cursor: pointer; }
+  .primary { padding: 8px 16px; border: 0; border-radius: 10px; background: var(--accent); color: var(--bg);
+             font: inherit; cursor: pointer; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .stack > * { margin: 0 0 12px; }
+  .err { color: #c0392b; min-height: 1em; }
+  dialog { width: min(440px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 14px;
+           background: var(--bg); color: var(--fg); padding: 20px; }
+  dialog::backdrop { background: rgb(0 0 0 / .45); }
+  dialog h2 { margin-top: 0; }
+  .combo { display: block; width: 100%; text-align: left; margin-bottom: 8px; padding: 12px 14px; font: inherit;
+           color: inherit; background: transparent; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+  .combo small { display: block; color: var(--muted); }
+  .item { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .item span { flex: 1; }
+  .item input { width: 120px; padding: 6px 10px; }
 </style>
 </head>
 <body>
 <main>
-  <h1>pourpair</h1>
+  <header><h1>pourpair</h1><div id="account"></div></header>
   <p class="sub">Pick ingredients. See what pairs well with all of them.</p>
   <input id="search" list="names" placeholder="Add an ingredient, e.g. lime" autocomplete="off" aria-label="Add an ingredient">
   <datalist id="names"></datalist>
   <div class="chips" id="picked" aria-label="Selected ingredients"></div>
   <div class="status" id="status" aria-live="polite">Loading ingredients…</div>
   <div class="chips" id="results"></div>
+  <p id="saveBar" hidden><button class="primary" id="saveBtn">Save this combo</button></p>
+  <section id="mine" hidden>
+    <h2>My combos</h2>
+    <div id="comboList"></div>
+  </section>
 </main>
+
+<dialog id="authDlg">
+  <form id="authForm" class="stack">
+    <h2>Sign in</h2>
+    <input id="email" type="email" placeholder="Email" autocomplete="email" required aria-label="Email">
+    <input id="password" type="password" placeholder="Password (8+ characters)" minlength="8" required
+           autocomplete="current-password" aria-label="Password">
+    <div class="err" id="authErr" aria-live="polite"></div>
+    <div class="row">
+      <button class="primary" value="signin">Sign in</button>
+      <button class="link" value="signup">Create account</button>
+      <button class="link" value="forgot" formnovalidate>Forgot password?</button>
+      <button class="link" value="close" formnovalidate>Cancel</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="pwDlg">
+  <form id="pwForm" class="stack">
+    <h2>Set a new password</h2>
+    <input id="newPw" type="password" placeholder="New password (8+ characters)" minlength="8" required
+           autocomplete="new-password" aria-label="New password">
+    <div class="err" id="pwErr" aria-live="polite"></div>
+    <button class="primary">Save password</button>
+  </form>
+</dialog>
+
+<dialog id="comboDlg">
+  <form id="comboForm" class="stack">
+    <input id="cName" placeholder="Combo name" maxlength="80" required aria-label="Combo name">
+    <div id="cItems"></div>
+    <input id="cAdd" list="names" placeholder="Add an ingredient" autocomplete="off" aria-label="Add an ingredient to this combo">
+    <textarea id="cNotes" rows="4" placeholder="Notes: method, glass, garnish, ideas" aria-label="Notes"></textarea>
+    <div class="err" id="comboErr" aria-live="polite"></div>
+    <div class="row">
+      <button class="primary" value="save">Save</button>
+      <button class="link" value="show" formnovalidate>See pairings</button>
+      <button class="link" value="delete" formnovalidate id="cDelete">Delete</button>
+      <button class="link" value="close" formnovalidate>Close</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-// Supabase publishable key: safe in the browser, row level security limits it to reading suggestions.
-const API = "https://qadsopswciuagvepcuyh.supabase.co/rest/v1";
+// Supabase publishable key: safe in the browser, row level security limits it to reading suggestions
+// and to each signed-in user's own combos.
+const SUPABASE = "https://qadsopswciuagvepcuyh.supabase.co";
+const API = SUPABASE + "/rest/v1";
 const KEY = "sb_publishable_s9VaMlYhtn9n6O1XfC6w0Q_iUfMGFZa";
 const headers = { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" };
 
@@ -58,6 +130,7 @@ async function refresh() {
     picked = picked.filter((x) => x.id !== p.id); refresh();
   })));
   $("results").replaceChildren();
+  showSaveBar();
   if (!picked.length) { $("status").textContent = "Add an ingredient to start."; return; }
   $("status").textContent = "Looking…";
   const res = await fetch(`${API}/rpc/mutual_pairings`, {
@@ -81,8 +154,10 @@ function singular(w) {
 }
 const norm = (n) => (n.toLowerCase().replace(/’/g, "'").match(/[\w'&-]+/g) || []).map(singular).join(" ");
 
+const find = (typed) => byName.has(typed) ? typed : byKey.get(typed.toLowerCase()) || byKey.get(norm(typed));
+
 function add(typed) {
-  const name = byName.has(typed) ? typed : byKey.get(typed.toLowerCase()) || byKey.get(norm(typed));
+  const name = find(typed);
   const id = byName.get(name);
   if (!id) { if (typed) $("status").textContent = `No ingredient called "${typed}". Try the dropdown.`; return; }
   if (!picked.some((p) => p.id === id)) { picked.push({ id, name }); refresh(); }
@@ -90,6 +165,160 @@ function add(typed) {
 }
 
 $("search").addEventListener("change", (e) => add(e.target.value.trim()));
+
+// --- accounts ---------------------------------------------------------------------------
+const sb = supabase.createClient(SUPABASE, KEY);
+let user = null;
+
+sb.auth.onAuthStateChange((event, session) => {
+  user = session?.user || null;
+  if (event === "PASSWORD_RECOVERY") $("pwDlg").showModal();
+  setTimeout(() => { renderAccount(); showSaveBar(); loadCombos(); });   // never await sb calls inside this callback
+});
+
+function renderAccount() {
+  const a = $("account");
+  if (!user) {
+    a.replaceChildren(Object.assign(document.createElement("button"),
+      { className: "link", textContent: "Sign in", onclick: () => $("authDlg").showModal() }));
+    return;
+  }
+  a.replaceChildren(user.email + " · ", Object.assign(document.createElement("button"),
+    { className: "link", textContent: "Sign out", onclick: () => sb.auth.signOut() }));
+}
+
+$("authForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const action = e.submitter?.value || "signin";
+  const email = $("email").value.trim(), password = $("password").value;
+  $("authErr").textContent = "";
+  if (action === "close") return $("authDlg").close();
+  if (action === "forgot") {
+    if (!email) { $("authErr").textContent = "Type your email first."; return; }
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin });
+    $("authErr").textContent = error ? error.message : "Check your email for a reset link.";
+    return;
+  }
+  const { error } = action === "signup"
+    ? await sb.auth.signUp({ email, password })
+    : await sb.auth.signInWithPassword({ email, password });
+  if (error) { $("authErr").textContent = error.message; return; }
+  $("password").value = "";
+  $("authDlg").close();
+});
+
+$("pwForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const { error } = await sb.auth.updateUser({ password: $("newPw").value });
+  if (error) { $("pwErr").textContent = error.message; return; }
+  $("newPw").value = "";
+  $("pwDlg").close();
+});
+
+// --- saved combos -----------------------------------------------------------------------
+// A combo is a name, ingredients with optional amounts ('2 oz', 'dash'), and notes.
+let editing = null;   // { id: number|null, items: [{ id, name, amount }] }
+
+function showSaveBar() { $("saveBar").hidden = !(user && picked.length); }
+
+$("saveBtn").onclick = () => openCombo({ id: null, name: "", notes: "", items: picked.map((p) => ({ ...p, amount: "" })) });
+
+async function loadCombos() {
+  $("mine").hidden = !user;
+  if (!user) return;
+  const { data, error } = await sb.from("combos")
+    .select("id, name, notes, combo_items(ingredient_id, amount, position, ingredients(name))")
+    .eq("user_id", user.id).order("created_at", { ascending: false });
+  if (error) { $("comboList").textContent = "Couldn't load your combos: " + error.message; return; }
+  if (!data.length) { $("comboList").textContent = "No saved combos yet. Pick ingredients, then Save this combo."; return; }
+  $("comboList").replaceChildren(...data.map((c) => {
+    const items = c.combo_items.sort((a, b) => a.position - b.position)
+      .map((i) => ({ id: i.ingredient_id, name: i.ingredients.name, amount: i.amount || "" }));
+    const b = document.createElement("button");
+    b.className = "combo";
+    b.append(c.name, Object.assign(document.createElement("small"),
+      { textContent: items.map((i) => (i.amount ? i.amount + " " : "") + i.name).join(", ") }));
+    b.onclick = () => openCombo({ id: c.id, name: c.name, notes: c.notes || "", items });
+    return b;
+  }));
+}
+
+function openCombo(c) {
+  editing = { id: c.id, items: c.items };
+  $("cName").value = c.name;
+  $("cNotes").value = c.notes;
+  $("cDelete").hidden = c.id === null;
+  $("comboErr").textContent = "";
+  renderItems();
+  $("comboDlg").showModal();
+}
+
+function renderItems() {
+  $("cItems").replaceChildren(...editing.items.map((it) => {
+    const row = document.createElement("div");
+    row.className = "item";
+    const amt = Object.assign(document.createElement("input"),
+      { value: it.amount, placeholder: "amount", maxLength: 40, oninput: (e) => { it.amount = e.target.value; } });
+    amt.setAttribute("aria-label", "Amount of " + it.name);
+    const rm = Object.assign(document.createElement("button"), { type: "button", className: "link", textContent: "×",
+      onclick: () => { editing.items = editing.items.filter((x) => x !== it); renderItems(); } });
+    rm.setAttribute("aria-label", "Remove " + it.name);
+    row.append(Object.assign(document.createElement("span"), { textContent: it.name }), amt, rm);
+    return row;
+  }));
+}
+
+function addToCombo() {
+  const typed = $("cAdd").value.trim(), name = find(typed), id = byName.get(name);
+  if (!typed) return;
+  if (!id) { $("comboErr").textContent = `No ingredient called "${typed}".`; return; }
+  if (!editing.items.some((i) => i.id === id)) editing.items.push({ id, name, amount: "" });
+  $("cAdd").value = "";
+  $("comboErr").textContent = "";
+  renderItems();
+}
+$("cAdd").addEventListener("change", addToCombo);
+$("cAdd").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addToCombo(); } });   // Enter adds, not saves
+
+$("comboForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const action = e.submitter?.value || "save";
+  const err = (m) => { $("comboErr").textContent = m; };
+  if (action === "close") return $("comboDlg").close();
+  if (action === "show") {
+    picked = editing.items.map(({ id, name }) => ({ id, name }));
+    $("comboDlg").close();
+    return refresh();
+  }
+  if (action === "delete") {
+    if (!confirm("Delete this combo?")) return;
+    const { error } = await sb.from("combos").delete().eq("id", editing.id);
+    if (error) return err(error.message);
+    $("comboDlg").close();
+    return loadCombos();
+  }
+  if (!editing.items.length) return err("Add at least one ingredient.");
+  const fields = { name: $("cName").value.trim(), notes: $("cNotes").value.trim() || null };
+  let id = editing.id;
+  if (id === null) {
+    const { data, error } = await sb.from("combos").insert({ ...fields, user_id: user.id }).select("id").single();
+    if (error) return err(error.message);
+    id = editing.id = data.id;
+  } else {
+    const { error } = await sb.from("combos").update(fields).eq("id", id);
+    if (error) return err(error.message);
+  }
+  // Upsert first, then drop removed rows, so a failed save never loses what was there.
+  const rows = editing.items.map((it, position) =>
+    ({ combo_id: id, ingredient_id: it.id, amount: it.amount.trim() || null, position }));
+  const up = await sb.from("combo_items").upsert(rows, { onConflict: "combo_id,ingredient_id" });
+  if (up.error) return err(up.error.message);
+  const del = await sb.from("combo_items").delete().eq("combo_id", id)
+    .not("ingredient_id", "in", `(${rows.map((r) => r.ingredient_id).join(",")})`);
+  if (del.error) return err(del.error.message);
+  $("comboDlg").close();
+  loadCombos();
+});
 
 (async () => {
   // PostgREST caps a response at 1000 rows, so page through all ingredients.
