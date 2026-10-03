@@ -132,7 +132,7 @@ async function explore(id) {
     $("panel").append(box);
   }
   const rows = [...pm].map(([pid, p]) => ({ id: pid, name: name(pid), ...p })).filter((r) => byId.has(r.id));
-  for (const s of [4, 3, 2, 1]) {
+  for (const s of [2, 1]) {
     const list = rows.filter((r) => r.strength === s).sort((a, b) => a.name.localeCompare(b.name));
     if (!list.length) continue;
     const box = el("div", { className: "chips" });

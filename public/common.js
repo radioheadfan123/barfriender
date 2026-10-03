@@ -15,8 +15,8 @@ const keep = {
   set(k, v) { try { localStorage.setItem("pourpair:" + k, JSON.stringify(v)); } catch {} },
 };
 
-// Book strength from typography: plain 1, bold 2, BOLD CAPS 3, *BOLD CAPS 4.
-const STRENGTH = { 4: "Classic match", 3: "Highly recommended", 2: "Recommended", 1: "Pairs well" };
+// Two levels: 2 = recommended (any bold in the book), 1 = pairs well.
+const STRENGTH = { 2: "Recommended", 1: "Pairs well" };
 
 function chip(item, onClick) {
   const s = item.strength || 1;

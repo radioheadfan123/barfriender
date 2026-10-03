@@ -175,7 +175,8 @@ def build(entries):
             b = ingredient(p["name"])
             if b and a != b:
                 cur = pairs.setdefault((min(a, b), max(a, b)), {"strength": 1, "note": None})
-                cur["strength"] = max(cur["strength"], p["strength"])
+                # Two levels only (her call 2026-10-03): any bold in the book = 2 "recommended", plain = 1.
+                cur["strength"] = max(cur["strength"], min(p["strength"], 2))
                 cur["note"] = cur["note"] or p.get("note")
 
     # classic combos: only names that already match an ingredient, at least 2 of them
