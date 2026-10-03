@@ -87,3 +87,38 @@ test("menu access rules", { skip: !url && "no .env" }, async () => {
     await db.end();
   }
 });
+
+test("deleting an account keeps what it added to shared menus", { skip: !url && "no .env" }, async () => {
+  const db = new Client({ connectionString: url, ssl: { rejectUnauthorized: false } });
+  await db.connect();
+  const A = crypto.randomUUID(), B = crypto.randomUUID();
+  const as = async (who, sql, args = []) => {
+    await db.query("reset role");
+    await db.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: who, role: "authenticated", email: who + "@test.invalid" })]);
+    await db.query("set local role authenticated");
+    return (await db.query(sql, args)).rows;
+  };
+  const admin = async (sql, args = []) => { await db.query("reset role"); return (await db.query(sql, args)).rows; };
+  try {
+    await db.query("begin");
+    for (const id of [A, B]) await db.query("insert into auth.users (id, email, aud, role) values ($1, $2, 'authenticated', 'authenticated')", [id, id + "@test.invalid"]);
+    const [shared] = await as(A, "insert into menus (name) values ('Shared') returning id");
+    const [solo] = await as(A, "insert into menus (name) values ('Solo') returning id");
+    const [inv] = await as(A, "insert into menu_invites (menu_id, role) values ($1, 'editor') returning code", [shared.id]);
+    await as(B, "select join_menu($1)", [inv.code]);
+    const [drink] = await as(A, "insert into combos (user_id, menu_id, name) values ($1, $2, 'A drink') returning id", [A, shared.id]);
+    const [mine] = await as(A, "insert into combos (user_id, name) values ($1, 'A private') returning id", [A]);
+
+    await admin("delete from auth.users where id = $1", [A]);
+
+    assert.deepEqual(await admin("select owner_id from menus where id = $1", [shared.id]), [{ owner_id: B }], "B now owns the shared menu");
+    assert.deepEqual(await admin("select role from menu_members where menu_id = $1 and user_id = $2", [shared.id, B]), [{ role: "owner" }]);
+    assert.deepEqual(await admin("select user_id from combos where id = $1", [drink.id]), [{ user_id: null }], "A's drink stays in the menu");
+    assert.equal((await admin("select id from combos where id = $1", [mine.id])).length, 0, "A's private save is gone");
+    assert.equal((await admin("select id from menus where id = $1", [solo.id])).length, 0, "a menu with nobody else goes");
+    assert.equal((await as(B, "update combos set name = 'Still editable' where id = $1 returning id", [drink.id])).length, 1, "B can still edit it");
+  } finally {
+    await db.query("rollback").catch(() => {});
+    await db.end();
+  }
+});
