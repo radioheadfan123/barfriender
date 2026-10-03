@@ -65,7 +65,7 @@ async function pairsOf(id) {
 }
 
 // --- header ------------------------------------------------------------------------------
-const PAGES = [["/", "Mix"], ["/saved.html", "Saved"]];
+const PAGES = [["/", "Mix"], ["/saved.html", "Saved"], ["/menus.html", "Menus"]];   // "Menus" is a working name
 const here = location.pathname === "/index.html" ? "/" : location.pathname;
 document.querySelector("header.top").append(
   el("div", { className: "brand" }, el("a", { className: "wordmark", href: "/", textContent: "pourpair" }),

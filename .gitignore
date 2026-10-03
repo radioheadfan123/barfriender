@@ -3,3 +3,4 @@ supabase/seed.sql
 .env
 __pycache__/
 supabase/.temp/
+node_modules/

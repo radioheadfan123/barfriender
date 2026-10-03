@@ -203,8 +203,12 @@ function render() { renderMix(); suggest(); }
 async function fromHash() {
   const c = location.hash.match(/^#combo=(\d+)$/), l = location.hash.match(/^#ids=([\d,]+)$/);
   if (c) {
-    const { data } = await sb.from("combos").select("id, name, notes, combo_items(ingredient_id, amount, position)").eq("id", c[1]).maybeSingle();
-    if (data) mix = { savedId: data.id, name: data.name, notes: data.notes || "",
+    const { data } = await sb.from("combos").select("id, name, notes, menu_id, combo_items(ingredient_id, amount, position)").eq("id", c[1]).maybeSingle();
+    // From a shared menu: editors save back into the menu; viewers save their own copy.
+    const role = data?.menu_id ? (await sb.rpc("menu_role", { m: data.menu_id })).data : null;
+    if (role === "viewer") toast("You can view this menu, so saving makes your own copy.");
+    else if (role) toast("Changes you save go to the shared menu.");
+    if (data) mix = { savedId: role === "viewer" ? null : data.id, name: data.name, notes: data.notes || "",
       items: data.combo_items.sort((a, b) => a.position - b.position).filter((i) => byId.has(i.ingredient_id))
         .map((i) => ({ id: i.ingredient_id, name: name(i.ingredient_id), amount: i.amount || "" })),
       showAmounts: data.combo_items.some((i) => i.amount) };

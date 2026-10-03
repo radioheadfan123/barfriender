@@ -17,8 +17,8 @@ function render() {
     } });
     return el("a", { className: "saved", href: "/#combo=" + c.id },
       el("div", { className: "top" }, el("h2", { textContent: c.name }), el("span", { className: "label", textContent: c.is_drink ? "drink" : "combo" })),
-      el("p", { className: "muted", textContent: items, style: "margin: 6px 0" }),
-      c.notes ? el("p", { className: "faint", textContent: c.notes, style: "margin: 0 0 6px" }) : "", del);
+      el("p", { className: "muted tight", textContent: items }),
+      c.notes ? el("p", { className: "faint tight", textContent: c.notes }) : "", del);
   }));
 }
 
@@ -26,7 +26,7 @@ async function load() {
   if (!user) return render();
   const { data, error } = await sb.from("combos")
     .select("id, name, notes, is_drink, combo_items(amount, position, ingredients(name))")
-    .eq("user_id", user.id).order("created_at", { ascending: false });
+    .eq("user_id", user.id).is("menu_id", null).order("created_at", { ascending: false });
   if (error) return $("list").replaceChildren("Couldn't load: " + error.message);
   rows = data;
   render();

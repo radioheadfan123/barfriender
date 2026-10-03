@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Menus · pourpair</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Jost:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top"></header>
+<main id="view" aria-live="polite"></main>
+
+<dialog id="addDlg">
+  <form id="addForm" class="stack">
+    <h2>Add from your saves</h2>
+    <p class="faint">Each one is copied in. Your own saved version stays as it is.</p>
+    <div id="addList" class="stack picks"></div>
+    <div class="row"><button class="btn primary">Add to menu</button><button class="link" value="close" formnovalidate>Cancel</button></div>
+  </form>
+</dialog>
+
+<dialog id="nameDlg">
+  <form id="nameForm" class="stack">
+    <h2>Rename menu</h2>
+    <input id="nameInput" maxlength="80" required aria-label="Menu name">
+    <div class="row"><button class="btn primary">Save name</button><button class="link" value="close" formnovalidate>Cancel</button></div>
+  </form>
+</dialog>
+
+<script src="/vendor/supabase-2.117.2.js"></script>
+<script src="/common.js"></script>
+<script src="/menus.js"></script>
+</body>
+</html>
