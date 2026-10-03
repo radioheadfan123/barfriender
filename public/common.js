@@ -151,11 +151,15 @@ function toast(text, actions = {}) {
 
 // --- accounts ---------------------------------------------------------------------------
 let user = null;
+// Pages hook in with whenUser(fn): fn runs now if sign-in status is already known, and again on every change.
+// (The first auth event can fire before a page's own script has loaded; a plain onUser hook then never ran.)
+let authKnown = false;
+function whenUser(fn) { window.onUser = fn; if (authKnown) fn(); }
 
 sb.auth.onAuthStateChange((event, session) => {
   user = session?.user || null;
   if (event === "PASSWORD_RECOVERY") $("pwDlg").showModal();
-  setTimeout(() => { renderAccount(); window.onUser?.(); });   // never await sb calls inside this callback
+  setTimeout(() => { authKnown = true; renderAccount(); window.onUser?.(); });   // never await sb calls inside this callback
 });
 
 function renderAccount() {

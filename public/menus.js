@@ -32,7 +32,7 @@ async function route() {
   }
   return v.menu ? openMenu(v.menu) : listMenus();
 }
-window.onUser = route;
+whenUser(route);
 addEventListener("hashchange", route);
 
 // --- list -----------------------------------------------------------------------------------

@@ -31,7 +31,7 @@ async function load() {
   rows = data;
   render();
 }
-window.onUser = load;
+whenUser(load);
 
 $("tabs").addEventListener("click", (e) => {
   const b = e.target.closest("button");
