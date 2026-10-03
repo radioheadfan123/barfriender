@@ -1,6 +1,17 @@
 // Shared by every page: Supabase client, ingredient lookup, header, sign-in, toast.
 // Supabase publishable key: safe in the browser, row level security limits it to reading suggestions
 // and to each signed-in user's own saved combos.
+// Errors in visitors' browsers go to our own server log (Railway logs): message, file, line, page.
+// No personal data, at most 5 per page view.
+let reported = 0;
+function report(msg, src, line) {
+  if (reported++ >= 5) return;
+  const body = JSON.stringify({ msg: String(msg).slice(0, 300), src: String(src || "").slice(0, 200), line, page: location.pathname });
+  try { navigator.sendBeacon("/api/log", new Blob([body], { type: "application/json" })); } catch {}
+}
+addEventListener("error", (e) => report(e.message, e.filename, e.lineno));
+addEventListener("unhandledrejection", (e) => report(e.reason?.message || e.reason, "promise", 0));
+
 const SUPABASE = "https://qadsopswciuagvepcuyh.supabase.co";
 const KEY = "sb_publishable_s9VaMlYhtn9n6O1XfC6w0Q_iUfMGFZa";
 const sb = supabase.createClient(SUPABASE, KEY);
@@ -42,12 +53,19 @@ function singular(w) {
 const norm = (n) => (n.toLowerCase().replace(/’/g, "'").match(/[\w'&-]+/g) || []).map(singular).join(" ");
 const find = (typed) => byName.has(typed) ? typed : byKey.get(typed.toLowerCase()) || byKey.get(norm(typed));
 
+// One calm banner instead of a broken page when Supabase is down or the network drops.
+function offline() {
+  if ($("offline")) return;
+  document.querySelector("header.top").after(el("div", { id: "offline", className: "banner", role: "alert",
+    textContent: "We can't reach the pairing database right now. Check your connection and refresh in a minute." }));
+}
+
 const ready = (async () => {
   // PostgREST caps a response at 1000 rows, so page through all ingredients.
   for (let from = 0; ; from += 1000) {
     const { data, error } = await sb.from("ingredients").select("id, name, key, is_bar, taste, season, weight, volume")
       .order("name").range(from, from + 999);
-    if (error) throw error;
+    if (error) { offline(); report("ingredients: " + error.message, "common.js", 0); return; }
     data.forEach((r) => { byName.set(r.name, r.id); byKey.set(r.key, r.name); byKey.set(r.name.toLowerCase(), r.name); byId.set(r.id, r); });
     if (data.length < 1000) break;
   }
@@ -58,20 +76,22 @@ const ready = (async () => {
 const pairCache = new Map();
 async function pairsOf(id) {
   if (!pairCache.has(id)) {
-    const { data } = await sb.rpc("ingredient_pairings", { ing: id });
-    pairCache.set(id, new Map((data || []).map((r) => [r.id, { strength: r.strength, note: r.note }])));
+    const { data, error } = await sb.rpc("ingredient_pairings", { ing: id });
+    if (error) { offline(); return new Map(); }                // not cached, so a retry can succeed
+    pairCache.set(id, new Map(data.map((r) => [r.id, { strength: r.strength, note: r.note }])));
   }
   return pairCache.get(id);
 }
 
 // --- header ------------------------------------------------------------------------------
 const PAGES = [["/", "Mix"], ["/saved.html", "Saved"], ["/menus.html", "Menus"]];   // "Menus" is a working name
-const here = location.pathname === "/index.html" ? "/" : location.pathname;
+const page = (p) => p.replace(/\.html$/, "").replace(/^\/index$/, "/");   // /menus and /menus.html are the same page
+const here = page(location.pathname);
 document.querySelector("header.top").append(
   el("div", { className: "brand" }, el("a", { className: "wordmark", href: "/", textContent: "pourpair" }),
     el("nav", {}, ...PAGES.map(([href, label]) => {
       const a = el("a", { href, textContent: label });
-      if (href === here) a.setAttribute("aria-current", "page");
+      if (page(href) === here) a.setAttribute("aria-current", "page");
       return a;
     }))),
   el("div", { id: "account" }));
@@ -93,6 +113,19 @@ document.body.insertAdjacentHTML("beforeend", `
       <button class="link" value="forgot" formnovalidate>Forgot password?</button>
       <button class="link" value="close" formnovalidate>Cancel</button>
     </div>
+  </form>
+</dialog>
+
+<dialog id="accountDlg">
+  <form id="accountForm" class="stack">
+    <h2>Account</h2>
+    <p class="muted">Signed in as <span id="accountEmail"></span></p>
+    <div class="row"><button class="btn" value="signout">Sign out</button><button class="link" value="close" formnovalidate>Close</button></div>
+    <h3>Delete my account</h3>
+    <p class="faint">Deletes your account and your private saves for good. Drinks you added to shared menus stay for the others, and menus you own pass to another member.</p>
+    <input id="deleteConfirm" placeholder="Type DELETE to confirm" aria-label="Type DELETE to confirm" autocomplete="off">
+    <div class="err" id="accountErr" aria-live="polite"></div>
+    <button class="btn danger" value="delete">Delete my account</button>
   </form>
 </dialog>
 
@@ -128,7 +161,9 @@ sb.auth.onAuthStateChange((event, session) => {
 function renderAccount() {
   const a = $("account");
   if (!user) return a.replaceChildren(el("button", { className: "link", textContent: "Sign in", onclick: () => $("authDlg").showModal() }));
-  a.replaceChildren(user.email + " · ", el("button", { className: "link", textContent: "Sign out", onclick: () => sb.auth.signOut() }));
+  a.replaceChildren(el("button", { className: "link", textContent: user.email, title: "Account", onclick: () => {
+    $("accountEmail").textContent = user.email; $("deleteConfirm").value = ""; $("accountErr").textContent = ""; $("accountDlg").showModal();
+  } }));
 }
 
 $("authForm").addEventListener("submit", async (e) => {
@@ -150,6 +185,22 @@ $("authForm").addEventListener("submit", async (e) => {
   $("password").value = "";
   $("authDlg").close();
 });
+
+$("accountForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const action = e.submitter?.value;
+  if (action === "close") return $("accountDlg").close();
+  if (action === "signout") { await sb.auth.signOut(); return $("accountDlg").close(); }
+  if (action !== "delete") return;
+  if ($("deleteConfirm").value.trim() !== "DELETE") { $("accountErr").textContent = "Type DELETE to confirm."; return; }
+  const { error } = await sb.rpc("delete_my_account");
+  if (error) { $("accountErr").textContent = error.message; return; }
+  await sb.auth.signOut({ scope: "local" });
+  $("accountDlg").close();
+  toast("Your account has been deleted.");
+});
+
+document.body.append(el("footer", { className: "foot" }, el("a", { href: "/privacy.html", textContent: "Privacy" })));
 
 $("pwForm").addEventListener("submit", async (e) => {
   e.preventDefault();

@@ -122,3 +122,27 @@ test("deleting an account keeps what it added to shared menus", { skip: !url && 
     await db.end();
   }
 });
+
+test("delete_my_account removes only the caller", { skip: !url && "no .env" }, async () => {
+  const db = new Client({ connectionString: url, ssl: { rejectUnauthorized: false } });
+  await db.connect();
+  const A = crypto.randomUUID(), B = crypto.randomUUID();
+  try {
+    await db.query("begin");
+    for (const id of [A, B]) await db.query("insert into auth.users (id, email, aud, role) values ($1, $2, 'authenticated', 'authenticated')", [id, id + "@test.invalid"]);
+    await db.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: A, role: "authenticated" })]);
+    await db.query("set local role authenticated");
+    await db.query("select delete_my_account()");
+    await db.query("reset role");
+    const left = (await db.query("select id from auth.users where id = any($1)", [[A, B]])).rows.map((r) => r.id);
+    assert.deepEqual(left, [B]);
+    await db.query("savepoint s");
+    await db.query("select set_config('request.jwt.claims', '{}', true)");
+    await db.query("set local role anon");
+    await assert.rejects(db.query("select delete_my_account()"), "signed-out visitors can't call it");
+    await db.query("rollback to savepoint s");
+  } finally {
+    await db.query("rollback").catch(() => {});
+    await db.end();
+  }
+});

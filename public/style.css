@@ -119,3 +119,12 @@ select { font: inherit; color: var(--fg); background: var(--bg); border: 1px sol
 .picks { max-height: 50vh; overflow-y: auto; }
 .pick { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .pick input { accent-color: var(--brass); width: 18px; height: 18px; }
+
+/* offline banner, footer, destructive button */
+.banner { background: #3a2216; border-bottom: 1px solid #6b3a22; color: #f3c9a8; padding: 10px 24px; font-size: 14px; text-align: center; }
+.foot { text-align: center; padding: 0 24px 32px; font-size: 13px; }
+.foot a { color: var(--faint); }
+.btn.danger { border-color: #8a4a3a; color: #e8907a; }
+.prose { max-width: 680px; line-height: 1.7; }
+.prose h2 { font-size: 24px; margin-top: 8px; }
+.prose ul { margin: 0; padding-left: 20px; }

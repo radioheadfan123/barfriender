@@ -44,3 +44,28 @@ test("only site file types are served", async () => {
   assert.equal((await get("/missing.html")).statusCode, 404);
   assert.equal((await get("/x.env")).statusCode, 404);
 });
+
+const post = (p, body) => new Promise((resolve, reject) => {
+  const r = http.request({ host: "localhost", port: PORT, path: p, method: "POST", headers: { "Content-Type": "application/json" } }, (res) => {
+    res.resume(); res.on("end", () => resolve(res));
+  });
+  r.on("error", reject); r.end(body);
+});
+
+test("short URLs and a real 404 page", async () => {
+  assert.equal((await get("/menus")).statusCode, 200);
+  assert.equal((await get("/privacy")).statusCode, 200);
+  assert.equal((await get("/favicon.svg")).statusCode, 200);
+  const missing = await get("/nope");
+  assert.equal(missing.statusCode, 404);
+  assert.match(missing.headers["content-type"], /text\/html/, "404s get the friendly page");
+});
+
+test("error log endpoint accepts small reports and rate-limits", async () => {
+  assert.equal((await post("/api/log", JSON.stringify({ msg: "test", page: "/" }))).statusCode, 204);
+  assert.equal((await post("/api/log", "not json")).statusCode, 204);
+  const codes = [];
+  for (let i = 0; i < 25; i++) codes.push((await post("/api/log", "{}")).statusCode);
+  assert.ok(codes.includes(429), "too many reports from one visitor get refused");
+  assert.equal((await get("/")).statusCode, 200);
+});

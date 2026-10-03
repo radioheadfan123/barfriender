@@ -21,19 +21,6 @@ function add(typed) {
 $("search").addEventListener("change", (e) => add(e.target.value.trim()));
 
 // --- the mix -------------------------------------------------------------------------------
-// Largest groups in the mix where every member pairs with every other (mixes are small, so brute force).
-// ponytail: 2^n subsets, fine to ~15 ingredients; Bron-Kerbosch if mixes ever get bigger.
-function together(list, pm) {
-  const ok = (a, b) => pm.get(a).has(b) || pm.get(b).has(a);
-  const out = [];
-  for (let mask = (1 << list.length) - 1; mask > 0; mask--) {
-    const set = list.filter((_, i) => mask & (1 << i));
-    if (set.length < 2 || !set.every((a, i) => set.slice(i + 1).every((b) => ok(a, b)))) continue;
-    if (!out.some((c) => set.every((x) => c.includes(x)))) out.push(set);
-  }
-  return out.sort((a, b) => b.length - a.length);
-}
-
 function renderMix() {
   $("pills").replaceChildren(...mix.items.map((it) => el("span", { className: "pill" + (it.id === exploring ? " on" : "") },
     el("button", { className: "name", textContent: it.name, title: "Explore " + it.name, onclick: () => explore(it.id) }),
@@ -74,17 +61,7 @@ async function suggest() {
     : [tg.length ? bubbles("Pair well together", tg.map((g) => g.map(name).join(" + ")), "ok") : "",
        alone.length ? bubbles("No known pairing yet", alone.map(name), "") : ""]));
 
-  const groups = new Map();                                     // "id,id" -> { with, items }
-  for (const [cand, row] of byId) {
-    if (list.includes(cand) || (barOnly && !row.is_bar)) continue;
-    const w = list.filter((id) => pm.get(id).has(cand));
-    if (!w.length || ![...checked].every((c) => w.includes(c))) continue;
-    const k = w.join(",");
-    if (!groups.has(k)) groups.set(k, { with: w, items: [] });
-    groups.get(k).items.push({ id: cand, name: row.name, strength: Math.min(...w.map((id) => pm.get(id).get(cand).strength)) });
-  }
-  const order = (g) => g.with.map((id) => list.indexOf(id));
-  const sorted = [...groups.values()].sort((a, b) => b.with.length - a.with.length || order(a).join() .localeCompare(order(b).join()));
+  const sorted = suggestionGroups(list, pm, byId, { barOnly, checked });   // pairing.js
 
   $("filter").hidden = list.length < 2;
   $("filter").replaceChildren("Only show what pairs with:", ...list.map((id) => el("label", {},
@@ -95,7 +72,6 @@ async function suggest() {
     const k = g.with.join(","), all = g.with.length === list.length && list.length > 1, only = g.with.length === 1 && list.length > 1;
     const title = all ? (list.length === 2 ? "Pairs with both" : `Pairs with all ${list.length}`)
       : only ? "Only " + name(g.with[0]) : "Pairs with " + g.with.map(name).join(" + ");
-    g.items.sort((a, b) => b.strength - a.strength || a.name.localeCompare(b.name));
     const shown = expanded.has(k) ? g.items : g.items.slice(0, 10);
     const chips = shown.map((r) => chip(r, () => add(r.name)));
     if (shown.length < g.items.length) chips.push(el("button", { className: "chip more", textContent: `+${g.items.length - shown.length} more`,
