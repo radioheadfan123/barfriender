@@ -57,6 +57,10 @@ $("mixName").oninput = (e) => { mix.name = e.target.value; keep.set("mix", mix);
 $("notes").oninput = (e) => { mix.notes = e.target.value; keep.set("mix", mix); };
 
 // --- suggestions, grouped by exactly which mix ingredients they pair with --------------------
+// A label plus one bubble per group, e.g. Pair well together [rum + limes] [mint + sugar].
+const bubbles = (label, texts, cls) => el("div", { className: "bubbles " + cls },
+  el("span", { className: "label", textContent: label }), ...texts.map((t) => el("span", { className: "bubble", textContent: t })));
+
 async function suggest() {
   const list = ids();
   if (!list.length) return;
@@ -67,8 +71,8 @@ async function suggest() {
   const alone = list.filter((id) => list.length > 1 && !tg.some((g) => g.includes(id)));
   $("together").replaceChildren(...(tg.length === 1 && tg[0].length === list.length
     ? [el("span", { className: "ok", textContent: list.length === 2 ? "These two pair well." : `All ${list.length} pair well together.` })]
-    : [tg.length ? el("span", { className: "ok", textContent: "Pair well together: " + tg.map((g) => g.map(name).join(" + ")).join(" · ") }) : "",
-       alone.length ? el("span", { textContent: (tg.length ? ". " : "") + "No known pairing yet: " + alone.map(name).join(", ") }) : ""]));
+    : [tg.length ? bubbles("Pair well together", tg.map((g) => g.map(name).join(" + ")), "ok") : "",
+       alone.length ? bubbles("No known pairing yet", alone.map(name), "") : ""]));
 
   const groups = new Map();                                     // "id,id" -> { with, items }
   for (const [cand, row] of byId) {

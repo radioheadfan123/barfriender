@@ -40,6 +40,12 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; margin: 0; }
 .s2 { border: 1.5px solid var(--brass); color: var(--brass-text); font-weight: 600; }
 .chip small { color: var(--faint); font-size: 13px; font-weight: 400; text-transform: none; letter-spacing: 0; }
 .chip.more { border-style: dashed; color: var(--brass); }
+/* read-only groups under the mix: [rum + limes] [mint + sugar] */
+.bubbles { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0; }
+.bubbles .label { margin-right: 4px; }
+.bubble { display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 999px;
+          border: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+.bubbles.ok .bubble { border-color: var(--brass); color: var(--brass-text); }
 .btn { min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--brass); }
 .btn.primary { background: var(--brass); border-color: var(--brass); color: var(--bg); font-weight: 600; }
 .link { background: none; border: 0; padding: 0; color: var(--brass); }
