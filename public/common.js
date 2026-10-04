@@ -22,8 +22,8 @@ const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.crea
 // Work in progress (the mix, settings), so switching pages or reloading doesn't lose it.
 // Browser storage can be blocked (private mode); then pages just start fresh.
 const keep = {
-  get(k) { try { return JSON.parse(localStorage.getItem("pourpair:" + k)); } catch { return null; } },
-  set(k, v) { try { localStorage.setItem("pourpair:" + k, JSON.stringify(v)); } catch {} },
+  get(k) { try { return JSON.parse(localStorage.getItem("barfriender:" + k) ?? localStorage.getItem("pourpair:" + k)); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem("barfriender:" + k, JSON.stringify(v)); } catch {} },
 };
 
 // Two levels: 2 = recommended (any bold in the book), 1 = pairs well.
@@ -88,7 +88,7 @@ const PAGES = [["/", "Mix"], ["/saved.html", "Saved"], ["/menus.html", "Menus"]]
 const page = (p) => p.replace(/\.html$/, "").replace(/^\/index$/, "/");   // /menus and /menus.html are the same page
 const here = page(location.pathname);
 document.querySelector("header.top").append(
-  el("div", { className: "brand" }, el("a", { className: "wordmark", href: "/", textContent: "pourpair" }),
+  el("div", { className: "brand" }, el("a", { className: "wordmark", href: "/", textContent: "barfriender" }),
     el("nav", {}, ...PAGES.map(([href, label]) => {
       const a = el("a", { href, textContent: label });
       if (page(href) === here) a.setAttribute("aria-current", "page");

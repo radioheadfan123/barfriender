@@ -78,4 +78,4 @@ http.createServer((req, res) => {
   if (!path.extname(file)) file += ".html";                                    // /menus -> menus.html
   if (!types[path.extname(file)]) return serve(res, path.join(root, "404.html"), 404);   // only what the site uses
   serve(res, file);
-}).listen(process.env.PORT || 3000, () => console.log(`pourpair on :${process.env.PORT || 3000}`));
+}).listen(process.env.PORT || 3000, () => console.log(`barfriender on :${process.env.PORT || 3000}`));

@@ -1,4 +1,4 @@
-# pourpair
+# barfriender
 
 Pick an ingredient, see what pairs well with it. Pick several, see what pairs with all of them.
 Signed-in users save their own combinations and recipes and add their own pairings.
