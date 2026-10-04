@@ -25,8 +25,8 @@ function showMatches() {
   shown = matchNames([...byName.keys()], search.value);                       // pairing.js
   active = shown.length ? 0 : -1;
   matches.replaceChildren(...shown.map((n, i) => el("li", { id: "m" + i, role: "option", textContent: n,
-    onpointerdown: (e) => e.preventDefault(),                                   // keep focus (and the keyboard) on the input
-    onclick: () => { add(n); closeMatches(); } })));
+    onmousedown: (e) => e.preventDefault(),        // desktop: keep focus on the input (on touch this would cancel Safari's tap)
+    onclick: () => { add(n); closeMatches(); search.focus(); } })));
   highlight();
 }
 function highlight() {
@@ -37,7 +37,7 @@ function highlight() {
 }
 function closeMatches() { shown = []; active = -1; highlight(); }
 search.addEventListener("input", showMatches);
-search.addEventListener("blur", closeMatches);
+search.addEventListener("blur", () => setTimeout(closeMatches, 200));   // a tap on a match blurs first; let its click land
 search.addEventListener("keydown", (e) => {
   if (e.key === "ArrowDown" || e.key === "ArrowUp") {
     if (!shown.length) return;
@@ -86,11 +86,9 @@ async function suggest() {
   if (ids().join() !== list.join()) return;                    // mix changed while loading
 
   const tg = list.length > 1 ? together(list, pm) : [];
-  const alone = list.filter((id) => list.length > 1 && !tg.some((g) => g.includes(id)));
   $("together").replaceChildren(...(tg.length === 1 && tg[0].length === list.length
     ? [el("span", { className: "ok", textContent: list.length === 2 ? "These two pair well." : `All ${list.length} pair well together.` })]
-    : [tg.length ? bubbles("Pair well together", tg.map((g) => g.map(name).join(" + ")), "ok") : "",
-       alone.length ? bubbles("No known pairing yet", alone.map(name), "") : ""]));
+    : tg.length ? [bubbles("Pair well together", tg.map((g) => g.map(name).join(" + ")), "ok")] : []));
 
   const sorted = suggestionGroups(list, pm, byId, { barOnly, checked });   // pairing.js
 
