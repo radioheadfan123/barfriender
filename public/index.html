@@ -18,7 +18,11 @@
 <header class="top"></header>
 <div class="layout" id="layout">
   <main>
-    <input id="search" list="names" placeholder="Add an ingredient, e.g. lime, bourbon, mint" autocomplete="off" aria-label="Add an ingredient">
+    <div class="combo">
+      <input id="search" role="combobox" aria-expanded="false" aria-controls="matches" aria-autocomplete="list"
+             placeholder="Add an ingredient, e.g. lime, bourbon, mint" autocomplete="off" autocapitalize="none" enterkeyhint="done" aria-label="Add an ingredient">
+      <ul id="matches" role="listbox" aria-label="Matching ingredients" hidden></ul>
+    </div>
 
     <section class="card" aria-label="Your mix">
       <div class="mixrow">

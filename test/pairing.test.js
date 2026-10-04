@@ -1,7 +1,7 @@
 // The Mix page's grouping logic, on a tiny made-up pairing graph.
 const { test } = require("node:test");
 const assert = require("node:assert");
-const { together, suggestionGroups } = require("../public/pairing.js");
+const { together, suggestionGroups, matchNames } = require("../public/pairing.js");
 
 // rum 1, lime 2, mint 3, cola 4 (pairs with nothing in the mix); candidates 10-13.
 const edges = { 1: { 2: 2, 3: 1, 10: 2, 11: 1, 12: 1 }, 2: { 1: 2, 3: 2, 10: 1, 11: 2 }, 3: { 1: 1, 2: 2, 10: 1, 13: 1 }, 4: {} };
@@ -37,4 +37,12 @@ test("bar-only and the 'only show what pairs with' filter", () => {
 test("within a group, stronger pairings come first, then A to Z", () => {
   const g = suggestionGroups([1], pm, cands);
   assert.deepEqual(g[0].items.map((i) => i.name), ["sugar", "pineapple", "soda"]);
+});
+
+test("search matches: starts-with first, then word start, then anywhere, capped", () => {
+  const names = ["lime", "lime juice", "key lime", "sublime syrup", "mint", "LIME LEAF"];
+  assert.deepEqual(matchNames(names, "lim"), ["lime", "LIME LEAF", "lime juice", "key lime", "sublime syrup"]);
+  assert.deepEqual(matchNames(names, "  "), []);
+  assert.deepEqual(matchNames(names, "zz"), []);
+  assert.equal(matchNames(names, "i", 2).length, 2);
 });

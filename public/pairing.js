@@ -32,4 +32,13 @@ function suggestionGroups(list, pm, candidates, { barOnly = false, checked = new
   return sorted;
 }
 
-if (typeof module !== "undefined") module.exports = { together, suggestionGroups };
+// Search-box matches: names starting with the text first, then a word starting with it, then anywhere.
+function matchNames(names, typed, n = 8) {
+  const q = typed.trim().toLowerCase();
+  if (!q) return [];
+  const rank = (name) => { const l = name.toLowerCase(); return l.startsWith(q) ? 0 : (" " + l).includes(" " + q) ? 1 : l.includes(q) ? 2 : 3; };
+  return names.map((name) => [rank(name), name]).filter(([r]) => r < 3)
+    .sort((a, b) => a[0] - b[0] || a[1].length - b[1].length || a[1].localeCompare(b[1])).slice(0, n).map(([, name]) => name);
+}
+
+if (typeof module !== "undefined") module.exports = { together, suggestionGroups, matchNames };

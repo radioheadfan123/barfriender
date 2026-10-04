@@ -18,7 +18,38 @@ function add(typed) {
   $("search").value = "";
   changed();
 }
-$("search").addEventListener("change", (e) => add(e.target.value.trim()));
+// Our own dropdown: phone browsers barely show a <datalist> while you type.
+const search = $("search"), matches = $("matches");
+let shown = [], active = -1;
+function showMatches() {
+  shown = matchNames([...byName.keys()], search.value);                       // pairing.js
+  active = shown.length ? 0 : -1;
+  matches.replaceChildren(...shown.map((n, i) => el("li", { id: "m" + i, role: "option", textContent: n,
+    onpointerdown: (e) => e.preventDefault(),                                   // keep focus (and the keyboard) on the input
+    onclick: () => { add(n); closeMatches(); } })));
+  highlight();
+}
+function highlight() {
+  [...matches.children].forEach((li, i) => li.setAttribute("aria-selected", i === active));
+  matches.hidden = !shown.length;
+  search.setAttribute("aria-expanded", shown.length > 0);
+  active >= 0 ? search.setAttribute("aria-activedescendant", "m" + active) : search.removeAttribute("aria-activedescendant");
+}
+function closeMatches() { shown = []; active = -1; highlight(); }
+search.addEventListener("input", showMatches);
+search.addEventListener("blur", closeMatches);
+search.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    if (!shown.length) return;
+    e.preventDefault();
+    active = (active + (e.key === "ArrowDown" ? 1 : -1) + shown.length) % shown.length;
+    highlight(); matches.children[active].scrollIntoView({ block: "nearest" });
+  } else if (e.key === "Enter") {
+    e.preventDefault();
+    add(active >= 0 ? shown[active] : search.value.trim());
+    closeMatches();
+  } else if (e.key === "Escape") closeMatches();
+});
 
 // --- the mix -------------------------------------------------------------------------------
 function renderMix() {

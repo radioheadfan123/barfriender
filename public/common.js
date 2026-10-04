@@ -69,7 +69,6 @@ const ready = (async () => {
     data.forEach((r) => { byName.set(r.name, r.id); byKey.set(r.key, r.name); byKey.set(r.name.toLowerCase(), r.name); byId.set(r.id, r); });
     if (data.length < 1000) break;
   }
-  $("names")?.replaceChildren(...[...byId.values()].map((r) => el("option", { value: r.name })));
 })();
 
 // Each ingredient's pairings, fetched once: id -> Map(partner id -> { strength, note }).
@@ -97,7 +96,6 @@ document.querySelector("header.top").append(
   el("div", { id: "account" }));
 
 document.body.insertAdjacentHTML("beforeend", `
-<datalist id="names"></datalist>
 <div id="toast" role="status" hidden></div>
 
 <dialog id="authDlg">
