@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feedback · barfriender</title>
+<meta name="description" content="Send feedback or report a bug on barfriender.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Jost:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top"></header>
+<main class="prose">
+  <h1>Feedback</h1>
+  <p class="muted">Ideas, wrong pairings, something broken? It comes straight to us.</p>
+  <form id="fbForm" class="stack">
+    <div class="row">
+      <label class="pick"><input type="radio" name="kind" value="feedback" checked> Feedback</label>
+      <label class="pick"><input type="radio" name="kind" value="bug"> Bug report</label>
+    </div>
+    <textarea id="fbMessage" rows="7" maxlength="4000" required aria-label="Your message"
+              placeholder="What's on your mind? For a bug, say what you did and what happened."></textarea>
+    <input id="fbEmail" type="email" maxlength="254" autocomplete="email" placeholder="Your email (optional, if you'd like a reply)" aria-label="Your email, optional">
+    <input id="fbWebsite" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" class="hp">
+    <div class="err" id="fbErr" aria-live="polite"></div>
+    <div class="row"><button class="btn primary" id="fbSend">Send</button></div>
+  </form>
+  <p class="faint">We also get the page you came from and your browser type, to help with bugs. See <a href="/privacy.html">Privacy</a>.</p>
+</main>
+<script src="/vendor/supabase-2.117.2.js"></script>
+<script src="/common.js"></script>
+<script src="/feedback.js"></script>
+</body>
+</html>

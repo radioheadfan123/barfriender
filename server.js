@@ -1,5 +1,5 @@
 // Serves public/ on $PORT for Railway. Data comes straight from Supabase in the browser.
-// The one other route, POST /api/log, writes browser errors to the server log (see report() in common.js).
+// Two other routes: POST /api/log (browser errors to the server log) and POST /api/feedback (emailed to the owner).
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
@@ -34,25 +34,70 @@ function send(res, code, body = "", extra = {}) {
   res.end(body);
 }
 
-// --- POST /api/log: small JSON, a few per minute per visitor, printed as one line ---------------
-// ponytail: in-memory per-IP counter; fine on one instance, move to the platform's limiter if we scale out.
-const hits = new Map();
-setInterval(() => hits.clear(), 60_000).unref();
-function logError(req, res) {
-  const ip = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress).split(",")[0].trim();
-  if ((hits.get(ip) || 0) >= 20) { req.resume(); return send(res, 429); }
-  hits.set(ip, (hits.get(ip) || 0) + 1);
+// --- small JSON POSTs, counted per visitor ------------------------------------------------------
+// ponytail: in-memory per-IP counters; fine on one instance, move to the platform's limiter if we scale out.
+function limiter(max, ms) {
+  const hits = new Map();
+  setInterval(() => hits.clear(), ms).unref();
+  return (req) => {
+    const ip = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress).split(",")[0].trim();
+    hits.set(ip, (hits.get(ip) || 0) + 1);
+    return hits.get(ip) > max;
+  };
+}
+function readJson(req, max, done) {
   let body = "";
   req.setEncoding("utf8");
-  req.on("data", (c) => { body += c; if (body.length > 2000) req.destroy(); });
-  req.on("end", () => {
-    try {
-      const e = JSON.parse(body);
-      const clip = (v, n) => String(v ?? "").replace(/[\r\n]+/g, " ").slice(0, n);
-      console.error("client-error " + JSON.stringify({ msg: clip(e.msg, 300), src: clip(e.src, 200), line: Number(e.line) || 0,
-        page: clip(e.page, 100), ua: clip(req.headers["user-agent"], 120) }));
-    } catch {}
+  req.on("data", (c) => { body += c; if (body.length > max) req.destroy(); });
+  req.on("end", () => { let v = null; try { v = JSON.parse(body); } catch {} done(v); });
+}
+const clip = (v, n) => String(v ?? "").replace(/[\r\n]+/g, " ").slice(0, n);
+
+// POST /api/log: browser errors, printed as one line (see report() in common.js).
+const logLimited = limiter(20, 60_000);
+function logError(req, res) {
+  if (logLimited(req)) { req.resume(); return send(res, 429); }
+  readJson(req, 2000, (e) => {
+    if (e) console.error("client-error " + JSON.stringify({ msg: clip(e.msg, 300), src: clip(e.src, 200), line: Number(e.line) || 0,
+      page: clip(e.page, 100), ua: clip(req.headers["user-agent"], 120) }));
     send(res, 204);
+  });
+}
+
+// POST /api/feedback: emailed to the owner through Resend (RESEND_API_KEY + FEEDBACK_TO set in Railway).
+// Without them it is refused with 503, so the visitor is never told a message sent when it didn't.
+const feedbackLimited = limiter(5, 3_600_000);
+function feedback(req, res) {
+  if (feedbackLimited(req)) { req.resume(); return send(res, 429, "too many"); }
+  readJson(req, 6000, async (f) => {
+    if (!f) return send(res, 400, "bad request");
+    if (f.website) return send(res, 204);                          // honeypot: only bots fill the hidden field
+    const message = String(f.message ?? "").trim().slice(0, 4000);
+    if (!message) return send(res, 400, "empty");
+    const email = /^[^\s@<>]{1,64}@[^\s@<>]{1,190}\.[a-z]{2,}$/i.test(f.email ?? "") ? f.email : "";
+    const kind = f.kind === "bug" ? "Bug" : "Feedback";
+    const page = clip(f.page, 200), ua = clip(req.headers["user-agent"], 200);
+    console.log("feedback " + JSON.stringify({ kind, page, reply: !!email, chars: message.length }));
+    if (!process.env.RESEND_API_KEY || !process.env.FEEDBACK_TO) return send(res, 503, "not configured");
+    try {
+      const r = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: process.env.FEEDBACK_FROM || "barfriender <onboarding@resend.dev>",
+          to: process.env.FEEDBACK_TO,
+          ...(email && { reply_to: email }),
+          subject: `[barfriender] ${kind}: ${clip(message, 60)}`,
+          text: `${message}\n\n--\nFrom: ${email || "(no email given)"}\nPage: ${page}\nBrowser: ${ua}`,
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!r.ok) throw new Error(`resend ${r.status} ${clip(await r.text(), 200)}`);
+      send(res, 204);
+    } catch (e) {
+      console.error("feedback-send-failed " + clip(e.message, 300));
+      send(res, 502, "send failed");
+    }
   });
 }
 
@@ -69,6 +114,7 @@ function serve(res, file, code = 200) {
 
 http.createServer((req, res) => {
   if (req.method === "POST" && req.url === "/api/log") return logError(req, res);
+  if (req.method === "POST" && req.url === "/api/feedback") return feedback(req, res);
   if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "method not allowed", { Allow: "GET, HEAD" });
   let url;
   try { url = decodeURIComponent(req.url.split("?")[0]); } catch { return send(res, 400, "bad request"); }

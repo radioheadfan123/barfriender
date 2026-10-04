@@ -83,7 +83,7 @@ async function pairsOf(id) {
 }
 
 // --- header ------------------------------------------------------------------------------
-const PAGES = [["/", "Mix"], ["/saved.html", "Saved"], ["/menus.html", "Menus"]];   // "Menus" is a working name
+const PAGES = [["/", "Mix"], ["/saved.html", "Saved"], ["/menus.html", "Menus"], ["/feedback.html", "Feedback"]];   // "Menus" is a working name
 const page = (p) => p.replace(/\.html$/, "").replace(/^\/index$/, "/");   // /menus and /menus.html are the same page
 const here = page(location.pathname);
 document.querySelector("header.top").append(

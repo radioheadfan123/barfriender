@@ -9,7 +9,7 @@ const PORT = 3999;
 let proc;
 
 before(async () => {
-  proc = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], { env: { ...process.env, PORT } });
+  proc = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], { env: { ...process.env, PORT, RESEND_API_KEY: "", FEEDBACK_TO: "" } });
   await new Promise((r) => proc.stdout.once("data", r));
 });
 after(() => proc.kill());
@@ -68,4 +68,14 @@ test("error log endpoint accepts small reports and rate-limits", async () => {
   for (let i = 0; i < 25; i++) codes.push((await post("/api/log", "{}")).statusCode);
   assert.ok(codes.includes(429), "too many reports from one visitor get refused");
   assert.equal((await get("/")).statusCode, 200);
+});
+
+test("feedback: empty refused, bots ignored, unconfigured says so, then rate-limited", async () => {
+  const fb = (o) => post("/api/feedback", JSON.stringify(o));
+  assert.equal((await fb({ message: "   " })).statusCode, 400);
+  assert.equal((await fb({ message: "hi", website: "spam.example" })).statusCode, 204);
+  assert.equal((await fb({ message: "the dropdown is broken", kind: "bug" })).statusCode, 503, "no key in tests, so it must not claim it sent");
+  const codes = [];
+  for (let i = 0; i < 6; i++) codes.push((await fb({ message: "x" })).statusCode);
+  assert.ok(codes.includes(429));
 });
