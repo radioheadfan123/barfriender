@@ -56,6 +56,9 @@ test("short URLs and a real 404 page", async () => {
   assert.equal((await get("/menus")).statusCode, 200);
   assert.equal((await get("/privacy")).statusCode, 200);
   assert.equal((await get("/favicon.svg")).statusCode, 200);
+  const og = await get("/og.png");   // link-preview image, fetched by chat apps and social sites
+  assert.equal(og.statusCode, 200);
+  assert.equal(og.headers["content-type"], "image/png");
   const missing = await get("/nope");
   assert.equal(missing.statusCode, 404);
   assert.match(missing.headers["content-type"], /text\/html/, "404s get the friendly page");
