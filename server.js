@@ -15,7 +15,8 @@ const SUPABASE = "https://qadsopswciuagvepcuyh.supabase.co";
 const headers = {
   "Content-Security-Policy": [
     "default-src 'self'",
-    "script-src 'self'",
+    "script-src 'self' https://challenges.cloudflare.com",
+    "frame-src https://challenges.cloudflare.com",
     "style-src 'self' https://fonts.googleapis.com",
     "font-src https://fonts.gstatic.com",
     `connect-src 'self' ${SUPABASE} ${SUPABASE.replace("https", "wss")}`,

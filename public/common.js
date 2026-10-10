@@ -15,6 +15,7 @@ addEventListener("unhandledrejection", (e) => report(e.reason?.message || e.reas
 const SUPABASE = "https://qadsopswciuagvepcuyh.supabase.co";
 const KEY = "sb_publishable_s9VaMlYhtn9n6O1XfC6w0Q_iUfMGFZa";
 const sb = supabase.createClient(SUPABASE, KEY);
+const TURNSTILE = "0x4AAAAAAFTNtlb127Gua-Ft";   // Cloudflare CAPTCHA site key (public); Supabase checks the token
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
@@ -104,6 +105,7 @@ document.body.insertAdjacentHTML("beforeend", `
     <input id="email" type="email" placeholder="Email" autocomplete="email" required aria-label="Email">
     <input id="password" type="password" placeholder="Password (8+ characters)" minlength="8" required
            autocomplete="current-password" aria-label="Password">
+    <div id="captcha"></div>
     <div class="err" id="authErr" aria-live="polite"></div>
     <div class="row">
       <button class="btn primary" value="signin">Sign in</button>
@@ -168,6 +170,19 @@ function renderAccount() {
   } }));
 }
 
+// The CAPTCHA script loads only when the sign-in dialog first opens, not on every page.
+let captchaToken = null;
+const authDlg = $("authDlg"), openAuth = authDlg.showModal.bind(authDlg);
+authDlg.showModal = () => {
+  openAuth();
+  if (document.querySelector("script[src*='challenges.cloudflare.com']")) return;
+  document.head.append(el("script", { src: "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit", onload: () =>
+    turnstile.render("#captcha", { sitekey: TURNSTILE, theme: "dark",
+      callback: (t) => { captchaToken = t; }, "expired-callback": () => { captchaToken = null; } }) }));
+};
+// Tokens are single use: get a fresh one after every attempt.
+const resetCaptcha = () => { captchaToken = null; window.turnstile?.reset("#captcha"); };
+
 $("authForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const action = e.submitter?.value || "signin";
@@ -176,15 +191,18 @@ $("authForm").addEventListener("submit", async (e) => {
   if (action === "close") return $("authDlg").close();
   if (action === "forgot") {
     if (!email) { $("authErr").textContent = "Type your email first."; return; }
-    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin });
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin, captchaToken });
+    resetCaptcha();
     $("authErr").textContent = error ? error.message : "Check your email for a reset link.";
     return;
   }
-  const { error } = action === "signup"
-    ? await sb.auth.signUp({ email, password })
-    : await sb.auth.signInWithPassword({ email, password });
+  const { data, error } = action === "signup"
+    ? await sb.auth.signUp({ email, password, options: { captchaToken, emailRedirectTo: location.origin } })
+    : await sb.auth.signInWithPassword({ email, password, options: { captchaToken } });
+  resetCaptcha();
   if (error) { $("authErr").textContent = error.message; return; }
   $("password").value = "";
+  if (!data.session) { $("authErr").textContent = "Check your email and tap the link to finish creating your account."; return; }
   $("authDlg").close();
 });
 
