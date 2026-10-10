@@ -1,4 +1,4 @@
-"""Extract ingredient entries + pairings from The Flavor Bible PDF into data/flavor_bible.json.
+"""Extract ingredient entries + pairings from the source PDF into data/source.json.
 
 Usage: py scripts/extract.py <path-to-pdf>
 
@@ -227,6 +227,6 @@ if __name__ == "__main__":
         # bold keywords inside quotes ('mint' under MINT, notes that are half a sentence)
         e["pairings"] = [p for p in e["pairings"] if p["name"] != e["name"] and p["name"] not in e["name"]
                          and len((p["note"] or "").split()) <= 7]
-    out = Path(__file__).resolve().parent.parent / "data" / "flavor_bible.json"
+    out = Path(__file__).resolve().parent.parent / "data" / "source.json"
     out.write_text(json.dumps(entries, indent=1, ensure_ascii=False), encoding="utf-8")
     print(f"{len(entries)} entries, {sum(len(e['pairings']) for e in entries)} pairings -> {out}")
