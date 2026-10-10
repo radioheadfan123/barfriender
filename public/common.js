@@ -23,7 +23,7 @@ const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.crea
 // Work in progress (the mix, settings), so switching pages or reloading doesn't lose it.
 // Browser storage can be blocked (private mode); then pages just start fresh.
 const keep = {
-  get(k) { try { return JSON.parse(localStorage.getItem("barfriender:" + k) ?? localStorage.getItem("pourpair:" + k)); } catch { return null; } },
+  get(k) { try { return JSON.parse(localStorage.getItem("barfriender:" + k)); } catch { return null; } },
   set(k, v) { try { localStorage.setItem("barfriender:" + k, JSON.stringify(v)); } catch {} },
 };
 

@@ -10,7 +10,6 @@ const hashView = () => ({
   join: (location.hash.match(/^#join=([0-9a-f]{32})$/) || [])[1] || null,
 });
 const show = (...kids) => $("view").replaceChildren(...kids);
-const confirmDo = (text) => window.confirm(text);
 
 function stopLive() {
   if (channel) sb.removeChannel(channel);
@@ -98,7 +97,7 @@ function renderMenu() {
       c.notes ? el("p", { className: "faint tight", textContent: c.notes }) : "");
     if (canEdit) card.append(el("button", { className: "link", textContent: "Remove from menu", onclick: async (e) => {
       e.preventDefault();
-      if (!confirmDo(`Remove “${c.name}” from this menu?`)) return;
+      if (!confirm(`Remove “${c.name}” from this menu?`)) return;
       const { error } = await sb.from("combos").delete().eq("id", c.id);
       if (error) return toast("Couldn't remove: " + error.message);
       refreshSoon();
@@ -165,7 +164,7 @@ function membersBox() {
         refreshSoon();
       } }, ...["editor", "viewer"].map((r) => el("option", { value: r, textContent: ROLE[r], selected: p.role === r })));
       row.append(el("span", { className: "row" }, sel, el("button", { className: "link", textContent: "Remove", onclick: async () => {
-        if (!confirmDo(`Remove ${p.email || "this person"} from the menu?`)) return;
+        if (!confirm(`Remove ${p.email || "this person"} from the menu?`)) return;
         const { error } = await sb.from("menu_members").delete().eq("menu_id", m.id).eq("user_id", p.user_id);
         if (error) return toast("Couldn't remove: " + error.message);
         refreshSoon();
@@ -219,14 +218,14 @@ $("nameForm").addEventListener("submit", async (e) => {
 });
 
 async function deleteMenu() {
-  if (!confirmDo(`Delete “${current.name}” for everyone? The drinks in it are deleted too. Everyone's own saves stay.`)) return;
+  if (!confirm(`Delete “${current.name}” for everyone? The drinks in it are deleted too. Everyone's own saves stay.`)) return;
   const { error } = await sb.from("menus").delete().eq("id", current.id);
   if (error) return toast("Couldn't delete: " + error.message);
   location.hash = "";
 }
 
 async function leaveMenu() {
-  if (!confirmDo(`Leave “${current.name}”? You'll need a new link to come back.`)) return;
+  if (!confirm(`Leave “${current.name}”? You'll need a new link to come back.`)) return;
   const { error } = await sb.from("menu_members").delete().eq("menu_id", current.id).eq("user_id", user.id);
   if (error) return toast("Couldn't leave: " + error.message);
   location.hash = "";
