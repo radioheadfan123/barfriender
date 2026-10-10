@@ -10,11 +10,18 @@ const ids = () => mix.items.map((i) => i.id);
 const name = (id) => byId.get(id).name;
 function changed() { keep.set("mix", mix); render(); }
 
+// Every way into the mix goes through here, so the 30-ingredient cap (the database's limit) always holds.
+const MAX = 30;
+function addId(id) {
+  if (ids().includes(id)) return true;
+  if (mix.items.length >= MAX) { toast(`A mix can have up to ${MAX} ingredients.`); return false; }
+  mix.items.push({ id, name: name(id), amount: "" });
+  return true;
+}
 function add(typed) {
   const n = find(typed), id = byName.get(n);
   if (!id) { if (typed) toast(`No ingredient called "${typed}". Try the dropdown.`); return; }
-  if (!ids().includes(id) && mix.items.length >= 30) { toast("A mix can have up to 30 ingredients."); return; }
-  if (!ids().includes(id)) mix.items.push({ id, name: n, amount: "" });
+  if (!addId(id)) return;
   $("search").value = "";
   changed();
 }
@@ -22,7 +29,7 @@ function add(typed) {
 const search = $("search"), matches = $("matches");
 let shown = [], active = -1;
 function showMatches() {
-  shown = matchNames([...byName.keys()], search.value);                       // pairing.js
+  shown = matchNames([...byName.keys()], search.value, 8, norm);                       // pairing.js
   active = shown.length ? 0 : -1;
   matches.replaceChildren(...shown.map((n, i) => el("li", { id: "m" + i, role: "option", textContent: n,
     onmousedown: (e) => e.preventDefault(),        // desktop: keep focus on the input (on touch this would cancel Safari's tap)
@@ -56,7 +63,12 @@ function renderMix() {
   $("pills").replaceChildren(...mix.items.map((it) => el("span", { className: "pill" + (it.id === exploring ? " on" : "") },
     el("button", { className: "name", textContent: it.name, title: "Explore " + it.name, onclick: () => explore(it.id) }),
     Object.assign(el("button", { className: "x", textContent: "×", onclick: () => {
-      mix.items = mix.items.filter((x) => x !== it); checked.delete(it.id); changed(); } }), { ariaLabel: "Remove " + it.name }))));
+      mix.items = mix.items.filter((x) => x !== it); checked.delete(it.id);
+      // Emptied by hand = starting over: forget which save this was, so the next Save can't overwrite it.
+      if (!mix.items.length) mix = { ...fresh(), showAmounts: mix.showAmounts };
+      changed();
+      if (it.id === exploring) explore(it.id);                  // panel now offers "Add to mix" again
+    } }), { ariaLabel: "Remove " + it.name }))));
   const has = mix.items.length > 0;
   $("actions").hidden = $("mixLinks").hidden = $("suggest").hidden = !has;
   if (!has) $("together").textContent = "Add an ingredient to start. Tap anything in your mix to explore it.";
@@ -70,7 +82,7 @@ function renderMix() {
   $("saveBtn").textContent = mix.savedId ? "Save changes" : "Save";
 }
 $("amountsBtn").onclick = () => { mix.showAmounts = !mix.showAmounts; changed(); };
-$("clearBtn").onclick = () => { mix = fresh(); checked.clear(); changed(); };
+$("clearBtn").onclick = () => { mix = fresh(); checked.clear(); closePanel(); };
 $("mixName").oninput = (e) => { mix.name = e.target.value; keep.set("mix", mix); };
 $("notes").oninput = (e) => { mix.notes = e.target.value; keep.set("mix", mix); };
 
@@ -134,7 +146,7 @@ async function explore(id) {
   if (combos.length) {
     const box = el("div", { className: "combos" });
     const link = (c) => el("a", { href: "#", textContent: c.map(name).join(" + "),
-      onclick: (e) => { e.preventDefault(); c.forEach((i) => ids().includes(i) || mix.items.push({ id: i, name: name(i), amount: "" })); changed(); explore(id); } });
+      onclick: (e) => { e.preventDefault(); c.every(addId); changed(); explore(id); } });
     const fill = (n) => box.replaceChildren(el("span", { className: "label", textContent: `Classic combos · ${combos.length} · tap to add` }),
       ...combos.slice(0, n).map(link), ...(combos.length > n ? [el("button", { className: "link", textContent: `+${combos.length - n} more`, onclick: () => fill(combos.length) })] : []));
     fill(5);
@@ -153,7 +165,7 @@ async function explore(id) {
 }
 function closePanel() { exploring = null; $("panel").hidden = true; $("layout").classList.remove("open"); renderMix(); }
 
-// --- saving: one tap, auto name, Rename / Undo in the toast ----------------------------------
+// --- saving: one tap, auto name, Rename / Undo in the toast. Clear starts the next mix. ------
 const autoName = () => mix.items.map((i) => i.name).join(" + ").slice(0, 80);
 
 async function writeItems(id, items) {
@@ -165,9 +177,14 @@ async function writeItems(id, items) {
   return del.error;
 }
 
-async function save(andNew) {
+let saving = false;                                             // a double tap must not save twice
+async function save() {
   if (!user) return $("authDlg").showModal();
-  if (!mix.items.length) return;
+  if (!mix.items.length || saving) return;
+  saving = true; $("saveBtn").disabled = true;
+  try { await saveNow(); } finally { saving = false; $("saveBtn").disabled = false; }
+}
+async function saveNow() {
   const snapshot = structuredClone(mix);
   const fields = { name: mix.name.trim() || autoName(), notes: mix.notes.trim() || null, is_drink: mix.items.some((i) => i.amount.trim()) };
   let id = mix.savedId, isNew = id === null, error;
@@ -180,9 +197,12 @@ async function save(andNew) {
     const res = await sb.from("combos").insert({ ...fields, user_id: user.id }).select("id").single();
     error = res.error; id = res.data?.id;
   }
-  error = error || await writeItems(id, mix.items);
+  if (!error) {
+    error = await writeItems(id, mix.items);
+    if (error && isNew) await sb.from("combos").delete().eq("id", id);   // don't leave an empty save behind
+  }
   if (error) return toast("Couldn't save: " + error.message);
-  if (andNew) { mix = fresh(); checked.clear(); closePanel(); } else { mix.savedId = id; mix.name = fields.name; }
+  mix.savedId = id; mix.name = fields.name;
   changed();
   toast(`Saved “${fields.name}”`, {
     Rename: () => { $("renameInput").value = fields.name; $("renameDlg").dataset.id = id; $("renameDlg").showModal(); },
@@ -192,13 +212,13 @@ async function save(andNew) {
     } } : {}),
   });
 }
-$("saveBtn").onclick = () => save(false);
-$("saveNewBtn").onclick = () => save(true);
+$("saveBtn").onclick = save;
 
 $("renameForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   if (e.submitter?.value === "close") return $("renameDlg").close();
   const id = Number($("renameDlg").dataset.id), n = $("renameInput").value.trim();
+  if (!n) { $("renameInput").value = ""; return $("renameInput").reportValidity(); }
   const { error } = await sb.from("combos").update({ name: n }).eq("id", id);
   $("renameDlg").close();
   if (error) return toast("Couldn't rename: " + error.message);
@@ -218,13 +238,15 @@ async function fromHash() {
     const role = data?.menu_id ? (await sb.rpc("menu_role", { m: data.menu_id })).data : null;
     if (role === "viewer") toast("You can view this menu, so saving makes your own copy.");
     else if (role) toast("Changes you save go to the shared menu.");
+    if (!data) toast((await sb.auth.getSession()).data.session
+      ? "That saved drink isn't available to you." : "Sign in to open that saved drink.");
     if (data) mix = { savedId: role === "viewer" ? null : data.id, name: data.name, notes: data.notes || "",
       items: data.combo_items.sort((a, b) => a.position - b.position).filter((i) => byId.has(i.ingredient_id))
         .map((i) => ({ id: i.ingredient_id, name: name(i.ingredient_id), amount: i.amount || "" })),
       showAmounts: data.combo_items.some((i) => i.amount) };
   }
-  if (l) l[1].split(",").map(Number).filter((id) => byId.has(id) && !ids().includes(id)).forEach((id) => mix.items.push({ id, name: name(id), amount: "" }));
-  if (c || l) history.replaceState(null, "", "/");
+  if (l) l[1].split(",").map(Number).filter((id) => byId.has(id)).every(addId);
+  if (location.hash) history.replaceState(null, "", "/");
   checked.clear();
   changed();
 }

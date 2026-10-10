@@ -1,17 +1,21 @@
 // Pure pairing logic shared by the Mix page and the tests (no DOM, no network).
 // pm: Map(mix ingredient id -> Map(partner id -> { strength, note })).
 
-// Largest groups in the mix where every member pairs with every other (mixes are small, so brute force).
-// ponytail: 2^n subsets, fine to ~15 ingredients; Bron-Kerbosch if mixes ever get bigger.
+// Largest groups in the mix where every member pairs with every other: the maximal cliques
+// (Bron-Kerbosch with a pivot, fast even for a full 30-ingredient mix). Members keep mix order.
 function together(list, pm) {
   const ok = (a, b) => pm.get(a).has(b) || pm.get(b).has(a);
+  const nb = new Map(list.map((a) => [a, new Set(list.filter((b) => b !== a && ok(a, b)))]));
   const out = [];
-  for (let mask = (1 << list.length) - 1; mask > 0; mask--) {
-    const set = list.filter((_, i) => mask & (1 << i));
-    if (set.length < 2 || !set.every((a, i) => set.slice(i + 1).every((b) => ok(a, b)))) continue;
-    if (!out.some((c) => set.every((x) => c.includes(x)))) out.push(set);
-  }
-  return out.sort((a, b) => b.length - a.length);
+  (function bk(r, p, x) {
+    if (!p.length && !x.length) { if (r.length > 1) out.push(list.filter((id) => r.includes(id))); return; }
+    const pivot = [...p, ...x].reduce((best, u) => (nb.get(u).size > nb.get(best).size ? u : best));
+    for (const v of p.filter((v) => !nb.get(pivot).has(v))) {
+      bk([...r, v], p.filter((u) => nb.get(v).has(u)), x.filter((u) => nb.get(v).has(u)));
+      p = p.filter((u) => u !== v); x = [...x, v];
+    }
+  })([], [...list], []);
+  return out.sort((a, b) => b.length - a.length || list.indexOf(a[0]) - list.indexOf(b[0]));
 }
 
 // Suggestions grouped by EXACTLY which mix ingredients they pair with, biggest groups first.
@@ -33,10 +37,12 @@ function suggestionGroups(list, pm, candidates, { barOnly = false, checked = new
 }
 
 // Search-box matches: names starting with the text first, then a word starting with it, then anywhere.
-function matchNames(names, typed, n = 8) {
-  const q = typed.trim().toLowerCase();
+// norm (optional) also compares singular forms, so "strawberry" finds "strawberries".
+function matchNames(names, typed, n = 8, norm = (t) => t) {
+  const q = typed.trim().toLowerCase(), nq = norm(q);
   if (!q) return [];
-  const rank = (name) => { const l = name.toLowerCase(); return l.startsWith(q) ? 0 : (" " + l).includes(" " + q) ? 1 : l.includes(q) ? 2 : 3; };
+  const at = (l, t) => (l.startsWith(t) ? 0 : (" " + l).includes(" " + t) ? 1 : l.includes(t) ? 2 : 3);
+  const rank = (name) => { const l = name.toLowerCase(); return Math.min(at(l, q), nq ? at(norm(l), nq) : 3); };
   return names.map((name) => [rank(name), name]).filter(([r]) => r < 3)
     .sort((a, b) => a[0] - b[0] || a[1].length - b[1].length || a[1].localeCompare(b[1])).slice(0, n).map(([, name]) => name);
 }

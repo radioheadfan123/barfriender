@@ -5,6 +5,7 @@ whenUser(() => { if (user?.email && !$("fbEmail").value) $("fbEmail").value = us
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   err.textContent = "";
+  if (!$("fbMessage").value.trim()) { err.textContent = "Write a message first."; return; }
   sendBtn.disabled = true; sendBtn.textContent = "Sending...";
   const body = { kind: form.kind.value, message: $("fbMessage").value, email: $("fbEmail").value.trim(),
     website: $("fbWebsite").value, page: document.referrer ? new URL(document.referrer).pathname : "" };

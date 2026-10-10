@@ -46,3 +46,21 @@ test("search matches: starts-with first, then word start, then anywhere, capped"
   assert.deepEqual(matchNames(names, "zz"), []);
   assert.equal(matchNames(names, "i", 2).length, 2);
 });
+
+test("together stays fast and correct on a full 30-ingredient mix", () => {
+  const ids = Array.from({ length: 30 }, (_, i) => i + 1);
+  // two cliques: odds all pair, evens all pair, plus one bridge 1-2
+  const g = new Map(ids.map((a) => [a, new Map(ids.filter((b) => b !== a && (a % 2 === b % 2 || a + b === 3)).map((b) => [b, {}]))]));
+  const t0 = Date.now(), out = together(ids, g);
+  assert.ok(Date.now() - t0 < 200, "should not be exponential");
+  assert.deepEqual(out.map((c) => c.length), [15, 15, 2]);
+  assert.deepEqual(out[2], [1, 2]);
+});
+
+test("search with a singular-form normalizer finds -ies plurals", () => {
+  const norm = (t) => t.split(" ").map((w) => (w.endsWith("ies") ? w.slice(0, -3) + "y" : w)).join(" ");
+  const names = ["strawberries", "cherry pie", "cranberries"];
+  assert.deepEqual(matchNames(names, "strawberry", 8, norm), ["strawberries"]);
+  assert.deepEqual(matchNames(names, "Cherry", 8, norm), ["cherry pie"]);
+  assert.deepEqual(matchNames(names, "strawberry"), [], "without norm, plain substring only");
+});

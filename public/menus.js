@@ -24,6 +24,7 @@ async function route() {
   if (!user) return show(el("h1", { textContent: "Menus" }),
     el("p", {}, v.join ? "Sign in to join this menu. " : "Sign in to make menus of your drinks and share them. ",
       el("button", { className: "link", textContent: "Sign in", onclick: () => $("authDlg").showModal() })));
+  if (/^#join=/.test(location.hash) && !v.join) { toast("That invite link looks cut off. Ask for the link again."); location.hash = ""; return; }
   if (v.join) {
     const { data, error } = await sb.rpc("join_menu", { invite: v.join });
     if (error) { toast(error.message); location.hash = ""; return; }
@@ -209,7 +210,9 @@ async function copyInto(menuId, c) {
 $("nameForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   if (e.submitter?.value === "close") return $("nameDlg").close();
-  const { error } = await sb.from("menus").update({ name: $("nameInput").value.trim() }).eq("id", current.id);
+  const name = $("nameInput").value.trim();
+  if (!name) { $("nameInput").value = ""; return $("nameInput").reportValidity(); }
+  const { error } = await sb.from("menus").update({ name }).eq("id", current.id);
   $("nameDlg").close();
   if (error) return toast("Couldn't rename: " + error.message);
   refreshSoon();
