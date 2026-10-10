@@ -171,10 +171,15 @@ async function save(andNew) {
   const snapshot = structuredClone(mix);
   const fields = { name: mix.name.trim() || autoName(), notes: mix.notes.trim() || null, is_drink: mix.items.some((i) => i.amount.trim()) };
   let id = mix.savedId, isNew = id === null, error;
+  if (!isNew) {
+    // The remembered combo can belong to another (or a deleted) account on this device: then save a new one.
+    const res = await sb.from("combos").update(fields).eq("id", id).select("id");
+    error = res.error; isNew = !error && !res.data.length;
+  }
   if (isNew) {
     const res = await sb.from("combos").insert({ ...fields, user_id: user.id }).select("id").single();
     error = res.error; id = res.data?.id;
-  } else ({ error } = await sb.from("combos").update(fields).eq("id", id));
+  }
   error = error || await writeItems(id, mix.items);
   if (error) return toast("Couldn't save: " + error.message);
   if (andNew) { mix = fresh(); checked.clear(); closePanel(); } else { mix.savedId = id; mix.name = fields.name; }
