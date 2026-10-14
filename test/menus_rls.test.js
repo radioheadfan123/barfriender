@@ -8,7 +8,9 @@ const path = require("node:path");
 const { Client } = require("pg");
 
 const envFile = path.join(__dirname, "..", ".env");
-const url = fs.existsSync(envFile) ? fs.readFileSync(envFile, "utf8").split(/\r?\n/)[0].replace(/^DATABASE_URL=/, "").trim() : "";
+// The first line that holds the URL, so comments above it are fine.
+const line = fs.existsSync(envFile) ? fs.readFileSync(envFile, "utf8").split(/\r?\n/).find((l) => /^(DATABASE_URL=)?postgres/.test(l.trim())) : "";
+const url = (line || "").trim().replace(/^DATABASE_URL=/, "");
 
 test("menu access rules", { skip: !url && "no .env" }, async () => {
   const db = new Client({ connectionString: url, ssl: { rejectUnauthorized: false } });
