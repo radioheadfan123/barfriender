@@ -26,7 +26,7 @@
   <main>
     <div class="combo">
       <input id="search" role="combobox" aria-expanded="false" aria-controls="matches" aria-autocomplete="list"
-             placeholder="Add an ingredient, e.g. lime, bourbon, mint" autocomplete="off" autocapitalize="none" enterkeyhint="done" aria-label="Add an ingredient">
+             placeholder="Add an ingredient, like lime or mint" autocomplete="off" autocapitalize="none" enterkeyhint="done" aria-label="Add an ingredient">
       <ul id="matches" role="listbox" aria-label="Matching ingredients" hidden></ul>
     </div>
 
@@ -54,7 +54,7 @@
     <section id="suggest" hidden>
       <div class="toolbar">
         <h2>What to add next</h2>
-        <label class="switch"><input type="checkbox" id="barOnly"> Bar only</label>
+        <label class="switch" title="Hide cooking ingredients like pasta or quail"><input type="checkbox" id="barOnly"> Drink ingredients only</label>
       </div>
       <div class="filter" id="filter" hidden></div>
       <div id="status" class="faint" aria-live="polite"></div>

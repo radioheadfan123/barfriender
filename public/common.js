@@ -52,7 +52,17 @@ function singular(w) {
   return w;
 }
 const norm = (n) => (n.toLowerCase().replace(/’/g, "'").match(/[\w'&-]+/g) || []).map(singular).join(" ");
-const find = (typed) => byName.has(typed) ? typed : byKey.get(typed.toLowerCase()) || byKey.get(norm(typed));
+// Accents don't matter ("curacao" finds "curaçao"), and common bar words map onto our names.
+const fold = (t) => t.normalize("NFD").replace(/[̀-ͯ]/g, "");
+const normF = (t) => norm(fold(t));
+const ALIASES = { whisky: "whiskey", rye: "whiskey", coke: "coca-cola", "coca cola": "coca-cola", seltzer: "club soda",
+  "soda water": "club soda", "sparkling water": "club soda", "sparkling wine": "champagne", bubbly: "champagne",
+  "coconut cream": "coconut and coconut milk", "coconut milk": "coconut and coconut milk", "honey syrup": "honey",
+  "sweet vermouth": "vermouth", "dry vermouth": "vermouth" };
+// "lime juice", "orange peel": the data folds juices and peels into the fruit itself.
+const plain = (t) => { const f = fold(t.trim().toLowerCase()); return ALIASES[f] || f.replace(/\s+(juice|zest|peel|twist|wedges?|wheels?|slices?)$/, ""); };
+const find = (typed) => byName.has(typed) ? typed : byKey.get(typed.toLowerCase()) || byKey.get(normF(typed))
+  || byKey.get(plain(typed)) || byKey.get(normF(plain(typed)));
 
 // One calm banner instead of a broken page when Supabase is down or the network drops.
 function offline() {
@@ -67,7 +77,7 @@ const ready = (async () => {
     const { data, error } = await sb.from("ingredients").select("id, name, key, is_bar, taste, season, weight, volume")
       .order("name").range(from, from + 999);
     if (error) { offline(); report("ingredients: " + error.message, "common.js", 0); return; }
-    data.forEach((r) => { byName.set(r.name, r.id); byKey.set(r.key, r.name); byKey.set(r.name.toLowerCase(), r.name); byId.set(r.id, r); });
+    data.forEach((r) => { byName.set(r.name, r.id); byKey.set(r.key, r.name); byKey.set(r.name.toLowerCase(), r.name); byKey.set(normF(r.name), r.name); byId.set(r.id, r); });
     if (data.length < 1000) break;
   }
 })();
@@ -101,18 +111,19 @@ document.body.insertAdjacentHTML("beforeend", `
 
 <dialog id="authDlg">
   <form id="authForm" class="stack">
-    <h2>Sign in</h2>
+    <h2 id="authTitle">Sign in</h2>
+    <p class="faint" id="authWhy" hidden></p>
     <input id="email" type="email" placeholder="Email" autocomplete="email" required aria-label="Email">
     <input id="password" type="password" placeholder="Password (8+ characters)" minlength="8" required
            autocomplete="current-password" aria-label="Password">
     <div id="captcha"></div>
     <div class="err" id="authErr" aria-live="polite"></div>
     <div class="row">
-      <button class="btn primary" value="signin">Sign in</button>
-      <button class="link" value="signup">Create account</button>
-      <button class="link" value="forgot" formnovalidate>Forgot password?</button>
+      <button class="btn primary" id="authMain" value="signin">Sign in</button>
+      <button class="link" id="authForgot" value="forgot" formnovalidate>Forgot password?</button>
       <button class="link" value="close" formnovalidate>Cancel</button>
     </div>
+    <button class="link" type="button" id="authMode">New here? Create an account</button>
   </form>
 </dialog>
 
@@ -180,6 +191,21 @@ authDlg.showModal = () => {
     turnstile.render("#captcha", { sitekey: TURNSTILE, theme: "dark",
       callback: (t) => { captchaToken = t; }, "expired-callback": () => { captchaToken = null; } }) }));
 };
+// One dialog, two modes, so new visitors see a plain "Create an account" form instead of hunting for a link.
+function authMode(signup) {
+  $("authTitle").textContent = signup ? "Create an account" : "Sign in";
+  $("authMain").textContent = signup ? "Create account" : "Sign in";
+  $("authMain").value = signup ? "signup" : "signin";
+  $("authMode").textContent = signup ? "Have an account? Sign in" : "New here? Create an account";
+  $("authForgot").hidden = signup;
+  $("password").autocomplete = signup ? "new-password" : "current-password";
+  $("authErr").textContent = "";
+}
+$("authMode").onclick = () => authMode($("authMain").value === "signin");
+// Open sign-in with a reason, e.g. from Save.
+function signIn(why) { $("authWhy").textContent = why; $("authWhy").hidden = false; authDlg.showModal(); }
+authDlg.addEventListener("close", () => { $("authWhy").hidden = true; authMode(false); });
+
 // Tokens are single use: get a fresh one after every attempt.
 const resetCaptcha = () => { captchaToken = null; window.turnstile?.reset("#captcha"); };
 

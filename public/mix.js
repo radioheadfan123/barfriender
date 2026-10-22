@@ -7,6 +7,7 @@ let exploring = null;                                           // id open in th
 const expanded = new Set();                                     // suggestion groups showing everything
 
 const ids = () => mix.items.map((i) => i.id);
+const STARTERS = ["bourbon", "gin", "tequila", "rum", "vodka", "limes", "mint", "ginger"];
 const name = (id) => byId.get(id).name;
 function changed() { keep.set("mix", mix); render(); }
 
@@ -22,6 +23,7 @@ function add(typed) {
   const n = find(typed), id = byName.get(n);
   if (!id) { if (typed) toast(`No ingredient called "${typed}". Try the dropdown.`); return; }
   if (!addId(id)) return;
+  if ($("toast").textContent.startsWith("No ingredient")) $("toast").hidden = true;
   $("search").value = "";
   changed();
 }
@@ -29,7 +31,9 @@ function add(typed) {
 const search = $("search"), matches = $("matches");
 let shown = [], active = -1;
 function showMatches() {
-  shown = matchNames([...byName.keys()], search.value, 8, norm);                       // pairing.js
+  const names = [...byName.keys()], bar = (n) => byId.get(byName.get(n)).is_bar;
+  shown = matchNames(names, search.value, 8, normF, bar);                              // pairing.js
+  if (!shown.length && search.value.trim()) shown = matchNames(names, plain(search.value), 8, normF, bar);   // "lime juice", "whisky"
   active = shown.length ? 0 : -1;
   matches.replaceChildren(...shown.map((n, i) => el("li", { id: "m" + i, role: "option", textContent: n,
     onmousedown: (e) => e.preventDefault(),        // desktop: keep focus on the input (on touch this would cancel Safari's tap)
@@ -71,7 +75,9 @@ function renderMix() {
     } }), { ariaLabel: "Remove " + it.name }))));
   const has = mix.items.length > 0;
   $("actions").hidden = $("mixLinks").hidden = $("suggest").hidden = !has;
-  if (!has) $("together").textContent = "Add an ingredient to start. Tap anything in your mix to explore it.";
+  if (!has) $("together").replaceChildren(el("div", { className: "start" },
+    el("span", { textContent: "Pick what you have and see what goes with all of it. Start with one:" }),
+    el("div", { className: "chips" }, ...STARTERS.filter((n) => byName.has(n)).map((n) => el("button", { className: "chip", textContent: n, onclick: () => add(n) })))));
   $("amounts").hidden = !(has && mix.showAmounts);
   $("amountsBtn").textContent = mix.showAmounts ? "Hide amounts" : "+ Add amounts and notes";
   $("mixName").value = mix.name;
@@ -108,7 +114,8 @@ async function suggest() {
   $("filter").replaceChildren("Only show what pairs with:", ...list.map((id) => el("label", {},
     el("input", { type: "checkbox", checked: checked.has(id), onchange: (e) => { e.target.checked ? checked.add(id) : checked.delete(id); suggest(); } }),
     name(id))));
-  $("status").textContent = sorted.length ? "Strongest first. Tap one to add it." : barOnly ? "Nothing on the bar list. Try turning off Bar only." : "No suggestions.";
+  $("status").textContent = sorted.length ? "Bold = recommended, plain = pairs well. Tap one to add it."
+    : barOnly ? "No drink ingredients pair with this. Try turning off Drink ingredients only." : "No suggestions.";
   $("groups").replaceChildren(...sorted.map((g) => {
     const k = g.with.join(","), all = g.with.length === list.length && list.length > 1, only = g.with.length === 1 && list.length > 1;
     const title = all ? (list.length === 2 ? "Pairs with both" : `Pairs with all ${list.length}`)
@@ -122,7 +129,7 @@ async function suggest() {
   }));
 }
 $("barOnly").checked = barOnly;
-$("barOnly").onchange = (e) => { barOnly = e.target.checked; keep.set("barOnly", barOnly); suggest(); };
+$("barOnly").onchange = (e) => { barOnly = e.target.checked; keep.set("barOnly", barOnly); suggest(); if (exploring) explore(exploring); };
 
 // --- explore panel ---------------------------------------------------------------------------
 async function explore(id) {
@@ -142,7 +149,8 @@ async function explore(id) {
 
   const [pm, aff] = await Promise.all([pairsOf(id), sb.from("affinities").select("ingredient_ids").contains("ingredient_ids", [id])]);
   if (exploring !== id) return;                                // moved on while loading
-  const combos = (aff.data || []).map((a) => a.ingredient_ids.filter((i) => byId.has(i)));
+  const combos = (aff.data || []).map((a) => a.ingredient_ids.filter((i) => byId.has(i)))
+    .filter((c) => !barOnly || c.every((i) => byId.get(i).is_bar));                     // no quail or pasta when drinks only
   if (combos.length) {
     const box = el("div", { className: "combos" });
     const link = (c) => el("a", { href: "#", textContent: c.map(name).join(" + "),
@@ -152,12 +160,16 @@ async function explore(id) {
     fill(5);
     $("panel").append(box);
   }
-  const rows = [...pm].map(([pid, p]) => ({ id: pid, name: name(pid), ...p })).filter((r) => byId.has(r.id));
+  const rows = [...pm].map(([pid, p]) => ({ id: pid, name: name(pid), ...p })).filter((r) => byId.has(r.id) && (!barOnly || byId.get(r.id).is_bar));
   for (const s of [2, 1]) {
     const list = rows.filter((r) => r.strength === s).sort((a, b) => a.name.localeCompare(b.name));
     if (!list.length) continue;
     const box = el("div", { className: "chips" });
-    const fill = (n) => box.replaceChildren(...list.slice(0, n).map((r) => chip(r, () => explore(r.id))),
+    const fill = (n) => box.replaceChildren(...list.slice(0, n).map((r) => {
+        const c = chip(r, () => explore(r.id));
+        if (ids().includes(r.id)) { c.classList.add("in"); c.title = "In your mix"; }
+        return c;
+      }),
       ...(list.length > n ? [el("button", { className: "chip more", textContent: `+${list.length - n} more`, onclick: () => fill(list.length) })] : []));
     fill(12);
     $("panel").append(el("div", { className: "stack" }, el("span", { className: "label", textContent: `${STRENGTH[s]} · ${list.length}` }), box));
@@ -178,8 +190,11 @@ async function writeItems(id, items) {
 }
 
 let saving = false;                                             // a double tap must not save twice
+let pendingSave = false;                                        // Save tapped while signed out
+whenUser(() => { if (user && pendingSave) { pendingSave = false; save(); } });
+$("authDlg").addEventListener("close", () => setTimeout(() => { if (!user) pendingSave = false; }, 1000));   // cancelled
 async function save() {
-  if (!user) return $("authDlg").showModal();
+  if (!user) { pendingSave = true; return signIn("Sign in or create an account to save this mix. It stays here while you do."); }
   if (!mix.items.length || saving) return;
   saving = true; $("saveBtn").disabled = true;
   try { await saveNow(); } finally { saving = false; $("saveBtn").disabled = false; }

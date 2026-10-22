@@ -38,13 +38,14 @@ function suggestionGroups(list, pm, candidates, { barOnly = false, checked = new
 
 // Search-box matches: names starting with the text first, then a word starting with it, then anywhere.
 // norm (optional) also compares singular forms, so "strawberry" finds "strawberries".
-function matchNames(names, typed, n = 8, norm = (t) => t) {
+// first (optional) puts preferred names ahead within the same match quality (bar items before food).
+function matchNames(names, typed, n = 8, norm = (t) => t, first = () => false) {
   const q = typed.trim().toLowerCase(), nq = norm(q);
   if (!q) return [];
   const at = (l, t) => (l.startsWith(t) ? 0 : (" " + l).includes(" " + t) ? 1 : l.includes(t) ? 2 : 3);
   const rank = (name) => { const l = name.toLowerCase(); return Math.min(at(l, q), nq ? at(norm(l), nq) : 3); };
   return names.map((name) => [rank(name), name]).filter(([r]) => r < 3)
-    .sort((a, b) => a[0] - b[0] || a[1].length - b[1].length || a[1].localeCompare(b[1])).slice(0, n).map(([, name]) => name);
+    .sort((a, b) => a[0] - b[0] || first(b[1]) - first(a[1]) || a[1].length - b[1].length || a[1].localeCompare(b[1])).slice(0, n).map(([, name]) => name);
 }
 
 if (typeof module !== "undefined") module.exports = { together, suggestionGroups, matchNames };

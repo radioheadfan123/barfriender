@@ -107,10 +107,9 @@ function renderMenu() {
 
   show(el("a", { href: "#", className: "label", textContent: "← Menus" }),
     el("div", { className: "toolbar" }, el("h1", { textContent: m.name }),
-      el("span", { className: "label", textContent: (others ? `Shared · ${ROLE[m.role]}` : "Private") + (channel ? " · live" : "") })),
+      el("span", { className: "label", textContent: (others ? `Shared · ${ROLE[m.role]}` : "Private") + (channel ? " · updates live" : "") })),
     m.role === "viewer" ? el("p", { className: "faint", textContent: "You can view this menu. Open a drink to make your own copy in Mix." }) : "",
-    actions, ...drinks,
-    m.role === "owner" ? shareBox() : "",
+    actions, m.role === "owner" ? shareBox() : "", ...drinks,
     others || m.role === "owner" ? membersBox() : "");
 }
 

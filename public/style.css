@@ -80,7 +80,9 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; margin: 0; }
 .amounts .item { display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--chip); padding-top: 10px; }
 .amounts .item span { flex: 1; }
 .amounts input { width: 110px; height: 40px; padding: 0 10px; text-align: right; background: var(--bg); }
-#notes, #mixName { width: 100%; padding: 10px 12px; background: var(--bg); }
+#notes, #mixName { width: 100%; padding: 10px 12px; background: var(--bg); text-align: left; }
+.chip.in { opacity: .55; } .chip.in::after { content: "✓"; }
+.start { display: flex; flex-direction: column; gap: 10px; }
 .actions { display: flex; gap: 10px; }
 
 /* suggestion groups */

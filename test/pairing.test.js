@@ -64,3 +64,9 @@ test("search with a singular-form normalizer finds -ies plurals", () => {
   assert.deepEqual(matchNames(names, "Cherry", 8, norm), ["cherry pie"]);
   assert.deepEqual(matchNames(names, "strawberry"), [], "without norm, plain substring only");
 });
+
+test("search puts preferred (bar) names first within the same match quality", () => {
+  const names = ["salt pork", "salt", "salted caramel", "sea salt"];
+  const bar = (n) => n === "salted caramel" || n === "sea salt";
+  assert.deepEqual(matchNames(names, "salt", 8, undefined, bar), ["salted caramel", "salt", "salt pork", "sea salt"]);
+});
