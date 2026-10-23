@@ -178,3 +178,19 @@ bitters
 club soda
 mezcal
 simple syrup
+absinthe
+angostura bitters
+aperol
+blue curaçao
+cachaça
+coffee liqueur
+elderflower liqueur
+falernum
+ginger beer
+irish cream
+limoncello
+orange bitters
+orgeat
+peychaud's bitters
+pisco
+sloe gin
