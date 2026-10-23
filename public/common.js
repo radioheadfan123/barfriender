@@ -55,10 +55,20 @@ const norm = (n) => (n.toLowerCase().replace(/’/g, "'").match(/[\w'&-]+/g) || 
 // Accents don't matter ("curacao" finds "curaçao"), and common bar words map onto our names.
 const fold = (t) => t.normalize("NFD").replace(/[̀-ͯ]/g, "");
 const normF = (t) => norm(fold(t));
-const ALIASES = { whisky: "whiskey", rye: "whiskey", coke: "coca-cola", "coca cola": "coca-cola", seltzer: "club soda",
+const ALIASES = { whisky: "whiskey", rye: "whiskey", coke: "cola", "coca cola": "cola", seltzer: "club soda",
   "soda water": "club soda", "sparkling water": "club soda", "sparkling wine": "champagne", bubbly: "champagne",
   "coconut cream": "coconut and coconut milk", "coconut milk": "coconut and coconut milk", "honey syrup": "honey",
-  "sweet vermouth": "vermouth", "dry vermouth": "vermouth" };
+  "sweet vermouth": "vermouth", "dry vermouth": "vermouth", angostura: "angostura bitters", peychauds: "peychaud's bitters",
+  "peychaud's": "peychaud's bitters", "st-germain": "elderflower liqueur", "st germain": "elderflower liqueur",
+  "st. germain": "elderflower liqueur", baileys: "irish cream", "bailey's": "irish cream", "orgeat syrup": "orgeat",
+  "velvet falernum": "falernum" };
+// Duplicate rows in the data, shown as one ingredient: the left name is hidden and folds into the right one
+// (search, suggestions and pairings). Saved drinks that hold the hidden one still open; saving again stores
+// the merged one. Only applies when both rows exist.
+const SAME = { "coca-cola": "cola", "grenadine syrup": "grenadine", soda: "club soda", "kahlúa": "coffee liqueur",
+  "curaçao": "orange curaçao" };
+const sameAs = new Map();           // hidden id -> the id it folds into
+const canon = (id) => sameAs.get(id) ?? id;
 // "lime juice", "orange peel": the data folds juices and peels into the fruit itself.
 const plain = (t) => { const f = fold(t.trim().toLowerCase()); return ALIASES[f] || f.replace(/\s+(juice|zest|peel|twist|wedges?|wheels?|slices?)$/, ""); };
 const find = (typed) => byName.has(typed) ? typed : byKey.get(typed.toLowerCase()) || byKey.get(normF(typed))
@@ -80,15 +90,27 @@ const ready = (async () => {
     data.forEach((r) => { byName.set(r.name, r.id); byKey.set(r.key, r.name); byKey.set(r.name.toLowerCase(), r.name); byKey.set(normF(r.name), r.name); byId.set(r.id, r); });
     if (data.length < 1000) break;
   }
+  for (const [dup, into] of Object.entries(SAME)) {
+    const d = byName.get(dup), c = byName.get(into);
+    if (!d || !c) continue;
+    sameAs.set(d, c); byName.delete(dup);
+    for (const [k, n] of byKey) if (n === dup) byKey.set(k, into);
+    byId.get(c).is_bar ||= byId.get(d).is_bar;
+  }
 })();
 
 // Each ingredient's pairings, fetched once: id -> Map(partner id -> { strength, note }).
+// A merged ingredient gets the pairings of every row folded into it (mergePairs in pairing.js).
 const pairCache = new Map();
 async function pairsOf(id) {
+  id = canon(id);
   if (!pairCache.has(id)) {
-    const { data, error } = await sb.rpc("ingredient_pairings", { ing: id });
-    if (error) { offline(); return new Map(); }                // not cached, so a retry can succeed
-    pairCache.set(id, new Map(data.map((r) => [r.id, { strength: r.strength, note: r.note }])));
+    const rows = [id, ...[...sameAs].filter(([, c]) => c === id).map(([d]) => d)];
+    const res = await Promise.all(rows.map((ing) => sb.rpc("ingredient_pairings", { ing })));
+    if (res.some((r) => r.error)) { offline(); return new Map(); }   // not cached, so a retry can succeed
+    const m = mergePairs(res.map((r) => r.data.map((x) => [x.id, { strength: x.strength, note: x.note }])), canon);
+    m.delete(id);
+    pairCache.set(id, m);
   }
   return pairCache.get(id);
 }

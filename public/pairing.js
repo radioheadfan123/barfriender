@@ -18,22 +18,30 @@ function together(list, pm) {
   return out.sort((a, b) => b.length - a.length || list.indexOf(a[0]) - list.indexOf(b[0]));
 }
 
-// Suggestions grouped by EXACTLY which mix ingredients they pair with, biggest groups first.
+// One ranked list: suggestions that pair with the most mix ingredients first ("goes with 5 of 6"),
+// then the stronger pairing, then A to Z. One pass over the candidates, so it stays fast for any mix size.
 // candidates: iterable of [id, { name, is_bar }]. checked: ids every suggestion must pair with.
-function suggestionGroups(list, pm, candidates, { barOnly = false, checked = new Set() } = {}) {
-  const groups = new Map();                                     // "id,id" -> { with, items }
+// Each item: { id, name, strength (the weakest link), with: [mix ids it pairs with, in mix order] }.
+function rankSuggestions(list, pm, candidates, { barOnly = false, checked = new Set() } = {}) {
+  const out = [];
   for (const [cand, row] of candidates) {
     if (list.includes(cand) || (barOnly && !row.is_bar)) continue;
     const w = list.filter((id) => pm.get(id).has(cand));
     if (!w.length || ![...checked].every((c) => w.includes(c))) continue;
-    const k = w.join(",");
-    if (!groups.has(k)) groups.set(k, { with: w, items: [] });
-    groups.get(k).items.push({ id: cand, name: row.name, strength: Math.min(...w.map((id) => pm.get(id).get(cand).strength)) });
+    out.push({ id: cand, name: row.name, with: w, strength: Math.min(...w.map((id) => pm.get(id).get(cand).strength)) });
   }
-  const order = (g) => g.with.map((id) => list.indexOf(id)).join();
-  const sorted = [...groups.values()].sort((a, b) => b.with.length - a.with.length || order(a).localeCompare(order(b)));
-  for (const g of sorted) g.items.sort((a, b) => b.strength - a.strength || a.name.localeCompare(b.name));
-  return sorted;
+  return out.sort((a, b) => b.with.length - a.with.length || b.strength - a.strength || a.name.localeCompare(b.name));
+}
+
+// Several ingredients' pairings as one (duplicates like cola / coca-cola): partner ids go through
+// canon, and the stronger pairing wins.
+function mergePairs(maps, canon = (id) => id) {
+  const out = new Map();
+  for (const m of maps) for (const [id, p] of m) {
+    const c = canon(id), cur = out.get(c);
+    if (!cur || p.strength > cur.strength) out.set(c, p);
+  }
+  return out;
 }
 
 // Search-box matches: names starting with the text first, then a word starting with it, then anywhere.
@@ -48,4 +56,28 @@ function matchNames(names, typed, n = 8, norm = (t) => t, first = () => false) {
     .sort((a, b) => a[0] - b[0] || first(b[1]) - first(a[1]) || a[1].length - b[1].length || a[1].localeCompare(b[1])).slice(0, n).map(([, name]) => name);
 }
 
-if (typeof module !== "undefined") module.exports = { together, suggestionGroups, matchNames };
+// Typo help ("bourbin" -> bourbon): names within a small edit distance of the text, closest first.
+// Compares against the whole name and each of its words, so "angostra" finds "angostura bitters".
+// Allows 1 edit for short text, 2 from 6 letters; a swap of two neighbors counts as 1.
+function closeNames(names, typed, n = 3, fold = (t) => t) {
+  const q = fold(typed.trim().toLowerCase());
+  if (q.length < 3) return [];
+  const max = q.length < 6 ? 1 : 2;
+  const dist = (a, b) => {
+    if (Math.abs(a.length - b.length) > max) return max + 1;
+    const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+    for (let j = 1; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+    return d[a.length][b.length];
+  };
+  return names.map((name) => {
+    const l = fold(name.toLowerCase());
+    return [Math.min(dist(q, l), ...l.split(/[\s,/]+/).filter(Boolean).map((w) => dist(q, w))), name];
+  }).filter(([d]) => d <= max).sort((a, b) => a[0] - b[0] || a[1].length - b[1].length || a[1].localeCompare(b[1]))
+    .slice(0, n).map(([, name]) => name);
+}
+
+if (typeof module !== "undefined") module.exports = { together, rankSuggestions, mergePairs, matchNames, closeNames };

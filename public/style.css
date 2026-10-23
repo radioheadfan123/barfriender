@@ -50,6 +50,7 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; margin: 0; }
   box-shadow: 0 12px 30px rgb(0 0 0 / .45); }
 #matches li { padding: 12px 14px; border-radius: 8px; cursor: pointer; }
 #matches li[aria-selected="true"], #matches li:hover { background: var(--chip); color: var(--brass-text); }
+#matches.guess::before { content: "Did you mean"; display: block; padding: 6px 14px 2px; font-size: 13px; color: var(--faint); }
 
 /* chips; s2 = recommended, plain = pairs well */
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }

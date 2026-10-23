@@ -188,8 +188,13 @@ async function openAdd() {
 $("addForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   if (e.submitter?.value === "close") return $("addDlg").close();
-  const picked = [...$("addList").querySelectorAll("input:checked")].map((i) => i.combo);
+  let picked = [...$("addList").querySelectorAll("input:checked")].map((i) => i.combo);
   $("addDlg").close();
+  // Adding copies, so adding the same save twice makes a duplicate: ask first. Cancel skips just those.
+  const same = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+  const dupes = picked.filter((c) => current.combos.some((x) => same(x.name, c.name)));
+  if (dupes.length && !confirm(`This menu already has ${dupes.map((c) => `“${c.name}”`).join(", ")}. Add another copy?`
+    + (dupes.length < picked.length ? " (Cancel adds the others without it.)" : ""))) picked = picked.filter((c) => !dupes.includes(c));
   for (const c of picked) {
     const err = await copyInto(current.id, c);
     if (err) { toast("Couldn't add “" + c.name + "”: " + err.message); break; }

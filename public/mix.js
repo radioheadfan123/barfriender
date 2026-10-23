@@ -4,7 +4,7 @@ let mix = { ...fresh(), ...(keep.get("mix") || {}) };          // items: [{ id, 
 let barOnly = keep.get("barOnly") ?? true;
 let checked = new Set();                                        // filter: show what pairs with these
 let exploring = null;                                           // id open in the panel
-const expanded = new Set();                                     // suggestion groups showing everything
+const expanded = new Set();                                     // suggestion tiers showing everything
 
 const ids = () => mix.items.map((i) => i.id);
 const STARTERS = ["bourbon", "gin", "tequila", "rum", "vodka", "limes", "mint", "ginger"];
@@ -14,6 +14,7 @@ function changed() { keep.set("mix", mix); render(); }
 // Every way into the mix goes through here, so the 30-ingredient cap (the database's limit) always holds.
 const MAX = 30;
 function addId(id) {
+  id = canon(id);                                                 // a merged duplicate adds as its main name
   if (ids().includes(id)) return true;
   if (mix.items.length >= MAX) { toast(`A mix can have up to ${MAX} ingredients.`); return false; }
   mix.items.push({ id, name: name(id), amount: "" });
@@ -21,9 +22,9 @@ function addId(id) {
 }
 function add(typed) {
   const n = find(typed), id = byName.get(n);
-  if (!id) { if (typed) toast(`No ingredient called "${typed}". Try the dropdown.`); return; }
+  if (!id) { if (typed) toast(`No ingredient called "${typed}" yet.`); return; }
   if (!addId(id)) return;
-  if ($("toast").textContent.startsWith("No ingredient")) $("toast").hidden = true;
+  if (!$("toast").querySelector("button")) $("toast").hidden = true;   // clear an old error; keep Saved · Undo
   $("search").value = "";
   changed();
 }
@@ -31,9 +32,15 @@ function add(typed) {
 const search = $("search"), matches = $("matches");
 let shown = [], active = -1;
 function showMatches() {
-  const names = [...byName.keys()], bar = (n) => byId.get(byName.get(n)).is_bar;
-  shown = matchNames(names, search.value, 8, normF, bar);                              // pairing.js
-  if (!shown.length && search.value.trim()) shown = matchNames(names, plain(search.value), 8, normF, bar);   // "lime juice", "whisky"
+  // Aliases ("kahlua", "angostura") are searchable too; every hit shows as the ingredient it finds.
+  const names = [...byName.keys(), ...Object.keys(ALIASES), ...Object.keys(SAME)];
+  const bar = (n) => byId.get(byName.get(find(n)))?.is_bar;
+  const pick = (found) => [...new Set(found.map(find).filter(Boolean))].slice(0, 8);
+  shown = pick(matchNames(names, search.value, 16, normF, bar));                      // pairing.js
+  if (!shown.length && search.value.trim()) shown = pick(matchNames(names, plain(search.value), 16, normF, bar));   // "lime juice"
+  const guess = !shown.length && search.value.trim().length > 0;
+  if (guess) shown = pick(closeNames(names, search.value, 3, fold));                  // "bourbin": did you mean bourbon?
+  matches.classList.toggle("guess", guess && shown.length > 0);
   active = shown.length ? 0 : -1;
   matches.replaceChildren(...shown.map((n, i) => el("li", { id: "m" + i, role: "option", textContent: n,
     onmousedown: (e) => e.preventDefault(),        // desktop: keep focus on the input (on touch this would cancel Safari's tap)
@@ -108,24 +115,34 @@ async function suggest() {
     ? [el("span", { className: "ok", textContent: list.length === 2 ? "These two pair well." : `All ${list.length} pair well together.` })]
     : tg.length ? [bubbles("Pair well together", tg.map((g) => g.map(name).join(" + ")), "ok")] : []));
 
-  const sorted = suggestionGroups(list, pm, byId, { barOnly, checked });   // pairing.js
+  const cands = [...byId].filter(([id]) => !sameAs.has(id));               // merged duplicates show once
+  const ranked = rankSuggestions(list, pm, cands, { barOnly, checked });     // pairing.js
 
   $("filter").hidden = list.length < 2;
   $("filter").replaceChildren("Only show what pairs with:", ...list.map((id) => el("label", {},
     el("input", { type: "checkbox", checked: checked.has(id), onchange: (e) => { e.target.checked ? checked.add(id) : checked.delete(id); suggest(); } }),
     name(id))));
-  $("status").textContent = sorted.length ? "Bold = recommended, plain = pairs well. Tap one to add it."
+  $("status").textContent = ranked.length ? "Bold = recommended, plain = pairs well. Tap one to add it."
     : barOnly ? "No drink ingredients pair with this. Try turning off Drink ingredients only." : "No suggestions.";
-  $("groups").replaceChildren(...sorted.map((g) => {
-    const k = g.with.join(","), all = g.with.length === list.length && list.length > 1, only = g.with.length === 1 && list.length > 1;
-    const title = all ? (list.length === 2 ? "Pairs with both" : `Pairs with all ${list.length}`)
-      : only ? "Only " + name(g.with[0]) : "Pairs with " + g.with.map(name).join(" + ");
-    const shown = expanded.has(k) ? g.items : g.items.slice(0, 10);
-    const chips = shown.map((r) => chip(r, () => add(r.name)));
-    if (shown.length < g.items.length) chips.push(el("button", { className: "chip more", textContent: `+${g.items.length - shown.length} more`,
-      onclick: () => { expanded.add(k); suggest(); } }));
+  // One ranked list, split where the count changes: "Goes with all 4", "Goes with 3 of 4"...
+  const tiers = [];
+  for (const r of ranked) {
+    if (tiers.at(-1)?.n !== r.with.length) tiers.push({ n: r.with.length, items: [] });
+    tiers.at(-1).items.push(r);
+  }
+  const len = list.length;
+  // Under each chip: what it misses or what it goes with, whichever is shorter.
+  const which = (r) => r.with.length === len ? null : r.with.length * 2 <= len ? "with " + r.with.map(name).join(" + ")
+    : "not " + list.filter((id) => !r.with.includes(id)).map(name).join(" + ");
+  $("groups").replaceChildren(...tiers.map(({ n, items }) => {
+    const all = n === len && len > 1, only = n === 1 && len > 1;
+    const title = len === 1 ? "Goes with " + name(list[0]) : all ? (len === 2 ? "Goes with both" : `Goes with all ${len}`) : `Goes with ${n} of ${len}`;
+    const shown = expanded.has(n) ? items : items.slice(0, 10);
+    const chips = shown.map((r) => chip({ ...r, note: which(r) }, () => add(r.name)));
+    if (shown.length < items.length) chips.push(el("button", { className: "chip more", textContent: `+${items.length - shown.length} more`,
+      onclick: () => { expanded.add(n); suggest(); } }));
     return el("section", { className: "group" + (all ? " all" : only ? " only" : "") },
-      el("h3", {}, title, el("small", { textContent: g.items.length })), el("div", { className: "chips" }, ...chips));
+      el("h3", {}, title, el("small", { textContent: items.length })), el("div", { className: "chips" }, ...chips));
   }));
 }
 $("barOnly").checked = barOnly;
@@ -149,7 +166,7 @@ async function explore(id) {
 
   const [pm, aff] = await Promise.all([pairsOf(id), sb.from("affinities").select("ingredient_ids").contains("ingredient_ids", [id])]);
   if (exploring !== id) return;                                // moved on while loading
-  const combos = (aff.data || []).map((a) => a.ingredient_ids.filter((i) => byId.has(i)))
+  const combos = (aff.data || []).map((a) => [...new Set(a.ingredient_ids.map(canon))].filter((i) => byId.has(i)))
     .filter((c) => !barOnly || c.every((i) => byId.get(i).is_bar));                     // no quail or pasta when drinks only
   if (combos.length) {
     const box = el("div", { className: "combos" });
@@ -261,6 +278,9 @@ async function fromHash() {
       showAmounts: data.combo_items.some((i) => i.amount) };
   }
   if (l) l[1].split(",").map(Number).filter((id) => byId.has(id)).every(addId);
+  // Merged duplicates (an old save with "coca-cola") show as the main name, once.
+  mix.items = mix.items.map((it) => (sameAs.has(it.id) ? { ...it, id: canon(it.id), name: name(canon(it.id)) } : it))
+    .filter((it, i, all) => all.findIndex((x) => x.id === it.id) === i);
   if (location.hash) history.replaceState(null, "", "/");
   checked.clear();
   changed();

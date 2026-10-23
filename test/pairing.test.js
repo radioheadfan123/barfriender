@@ -1,7 +1,7 @@
 // The Mix page's grouping logic, on a tiny made-up pairing graph.
 const { test } = require("node:test");
 const assert = require("node:assert");
-const { together, suggestionGroups, matchNames } = require("../public/pairing.js");
+const { together, rankSuggestions, mergePairs, matchNames, closeNames } = require("../public/pairing.js");
 
 // rum 1, lime 2, mint 3, cola 4 (pairs with nothing in the mix); candidates 10-13.
 const edges = { 1: { 2: 2, 3: 1, 10: 2, 11: 1, 12: 1 }, 2: { 1: 2, 3: 2, 10: 1, 11: 2 }, 3: { 1: 1, 2: 2, 10: 1, 13: 1 }, 4: {} };
@@ -20,23 +20,51 @@ test("together reports separate groups when not everything pairs", () => {
   assert.deepEqual(together([1, 2, 3], thin), [[1, 2]]);
 });
 
-test("suggestions are grouped by exactly what they pair with, biggest groups first", () => {
-  const g = suggestionGroups([1, 2, 3], pm, cands);
-  assert.deepEqual(g.map((x) => x.with), [[1, 2, 3], [1, 2], [1], [3]]);
-  assert.deepEqual(g[0].items.map((i) => i.name), ["sugar"]);
-  assert.equal(g[0].items[0].strength, 1, "strength is the weakest link");
-  assert.deepEqual(g[2].items.map((i) => i.name), ["pineapple"]);
+test("suggestions are one list ranked by how many mix items they go with, then strength", () => {
+  const r = rankSuggestions([1, 2, 3], pm, cands);
+  assert.deepEqual(r.map((x) => x.name), ["sugar", "soda", "cucumber", "pineapple"]);
+  assert.deepEqual(r.map((x) => x.with.length), [3, 2, 1, 1]);
+  assert.deepEqual(r[1].with, [1, 2], "with keeps mix order");
+  assert.equal(r[0].strength, 1, "strength is the weakest link");
+});
+
+test("same count: the stronger pairing ranks first, then A to Z", () => {
+  assert.deepEqual(rankSuggestions([1], pm, cands).map((x) => x.name), ["sugar", "pineapple", "soda"]);
 });
 
 test("bar-only and the 'only show what pairs with' filter", () => {
-  assert.ok(!suggestionGroups([1, 2, 3], pm, cands, { barOnly: true }).some((x) => x.items.some((i) => i.name === "pineapple")));
-  const onlyMint = suggestionGroups([1, 2, 3], pm, cands, { checked: new Set([3]) });
-  assert.deepEqual(onlyMint.map((x) => x.with), [[1, 2, 3], [3]]);
+  assert.ok(!rankSuggestions([1, 2, 3], pm, cands, { barOnly: true }).some((x) => x.name === "pineapple"));
+  assert.deepEqual(rankSuggestions([1, 2, 3], pm, cands, { checked: new Set([3]) }).map((x) => x.name), ["sugar", "cucumber"]);
 });
 
-test("within a group, stronger pairings come first, then A to Z", () => {
-  const g = suggestionGroups([1], pm, cands);
-  assert.deepEqual(g[0].items.map((i) => i.name), ["sugar", "pineapple", "soda"]);
+test("ranking a full 30-ingredient mix over 1,000 candidates is fast", () => {
+  const ids = Array.from({ length: 30 }, (_, i) => i + 1);
+  const many = new Map(Array.from({ length: 1000 }, (_, i) => [100 + i, { name: "c" + i, is_bar: true }]));
+  const g = new Map(ids.map((a) => [a, new Map([...many.keys()].filter((c) => c % a === 0).map((c) => [c, { strength: 1 + (c % 2) }]))]));
+  const t0 = Date.now(), r = rankSuggestions(ids, g, many);
+  assert.ok(Date.now() - t0 < 200, "should be linear in candidates");
+  assert.ok(r.every((x, i) => !i || r[i - 1].with.length >= x.with.length), "never fewer before more");
+});
+
+test("merged duplicates: partners map onto one id and the stronger pairing wins", () => {
+  // 951 coca-cola is a duplicate of 838 cola
+  const canon = (id) => (id === 951 ? 838 : id);
+  const m = mergePairs([new Map([[1, { strength: 1 }], [951, { strength: 2 }]]), new Map([[1, { strength: 2 }], [5, { strength: 1 }]])], canon);
+  assert.deepEqual([...m.keys()].sort(), [1, 5, 838]);
+  assert.equal(m.get(1).strength, 2);
+  assert.equal(m.get(838).strength, 2);
+});
+
+test("did you mean: typos within a small edit distance, closest first", () => {
+  const names = ["bourbon", "bourbon whiskey", "angostura bitters", "tequila", "rum", "curaçao", "gin"];
+  const fold = (t) => t.normalize("NFD").replace(/[̀-ͯ]/g, "");
+  assert.deepEqual(closeNames(names, "bourbin"), ["bourbon", "bourbon whiskey"]);
+  assert.deepEqual(closeNames(names, "tequlia"), ["tequila"], "a swap counts as one edit");
+  assert.deepEqual(closeNames(names, "angostra"), ["angostura bitters"], "matches a word inside the name");
+  assert.deepEqual(closeNames(names, "curacoa", 3, fold), ["curaçao"]);
+  assert.deepEqual(closeNames(names, "rim"), ["rum"]);
+  assert.deepEqual(closeNames(names, "gn"), [], "too short to guess");
+  assert.deepEqual(closeNames(names, "vodka"), [], "nothing close");
 });
 
 test("search matches: starts-with first, then word start, then anywhere, capped", () => {
