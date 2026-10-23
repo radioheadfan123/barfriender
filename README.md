@@ -5,7 +5,7 @@ A bartending pairing site I built for a close friend who bartends. Pick the ingr
 Live at **https://barfriender.app**
 
 ## What it does
-- Pick ingredients and see what pairs with them, grouped by which ones they match ("Pairs with all 3", "Only rum").
+- Pick ingredients and see what pairs with them, ranked by how many they go with ("Goes with all 3", "Goes with 2 of 3").
 - Tap any ingredient to explore what goes with it.
 - Make an account to save combos and drinks, with amounts and notes.
 - Shared menus: invite friends by link as editors or viewers, and changes show up live.
